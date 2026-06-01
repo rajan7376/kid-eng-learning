@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { WordCardRow } from "@/lib/types";
 import { speak } from "@/lib/speak";
 
@@ -21,9 +21,14 @@ interface Question {
   card: WordCardRow;
   options: string[];
   choiceAnswer: string;
-  fromSentence: boolean; // 填空題是否來自句子
+  fromSentence: boolean;
   blanked: string;
   fillAnswer: string;
+}
+
+interface Response {
+  choice: string | null;
+  fill: string;
 }
 
 function buildQuestions(cards: WordCardRow[]): Question[] {
@@ -52,6 +57,13 @@ function buildQuestions(cards: WordCardRow[]): Question[] {
   });
 }
 
+function isQuestionCorrect(q: Question, r: Response): boolean {
+  return (
+    r.choice === q.choiceAnswer &&
+    r.fill.trim().toLowerCase() === q.fillAnswer.trim().toLowerCase()
+  );
+}
+
 export default function ListeningTest({
   cards,
   onComplete,
@@ -62,111 +74,161 @@ export default function ListeningTest({
   onWrong?: (card: WordCardRow) => void;
 }) {
   const questions = useMemo(() => buildQuestions(cards), [cards]);
-  const [idx, setIdx] = useState(0);
-  const [score, setScore] = useState(0);
-  const scoreRef = useRef(0);
 
+  const [started, setStarted] = useState(false);
+  const [idx, setIdx] = useState(0);
+  const [responses, setResponses] = useState<Response[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
-  const [choiceDone, setChoiceDone] = useState(false);
   const [input, setInput] = useState("");
-  const [fillDone, setFillDone] = useState(false);
   const [done, setDone] = useState(false);
-  const firedRef = useRef(false);
 
   const current = questions[idx];
 
+  // 進入每一題唸一次單字
   useEffect(() => {
-    if (current) void speak(current.card.id, "word", "normal", current.card.english_word);
+    if (started && !done && current)
+      void speak(current.card.id, "word", "normal", current.card.english_word);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx]);
+  }, [idx, started]);
 
   // 測驗進行中阻止意外重整/離開
   useEffect(() => {
-    const active = !done && (idx > 0 || choiceDone);
-    if (!active) return;
+    if (!started || done) return;
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "";
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [done, idx, choiceDone]);
-
-  useEffect(() => {
-    if (done && !firedRef.current) {
-      firedRef.current = true;
-      onComplete?.(scoreRef.current, questions.length);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done]);
+  }, [started, done]);
 
   if (!current) {
     return <p className="text-slate-400">此週次沒有可測驗的單字。</p>;
   }
 
-  if (done) {
-    const full = score === questions.length && questions.length > 0;
+  // ---- 開始頁 ----
+  if (!started) {
     return (
-      <div className="bg-white rounded-2xl p-6 card-shadow text-center space-y-3">
-        <p className="text-xl font-extrabold text-brand">
-          {full ? "🎉 滿分！太棒了！" : "測驗完成！"}
-        </p>
-        <p className="text-lg">
-          得分 {score} / {questions.length}
+      <div className="bg-white rounded-2xl p-8 card-shadow text-center space-y-4">
+        <p className="text-5xl">🎧</p>
+        <h2 className="text-xl font-extrabold text-brand">聽力測驗</h2>
+        <p className="text-slate-600">
+          共 {questions.length} 題。每題先聽發音，選出正確中文，再拼出英文單字。
+          <br />
+          作答過程不會顯示對錯，完成最後一題後一次看結果。
         </p>
         <button
-          onClick={() => {
-            scoreRef.current = 0;
-            setIdx(0);
-            setScore(0);
-            setPicked(null);
-            setChoiceDone(false);
-            setInput("");
-            setFillDone(false);
-            setDone(false);
-            firedRef.current = false;
-          }}
-          className="rounded-full bg-brand text-white px-6 py-2 font-bold"
+          onClick={() => setStarted(true)}
+          className="rounded-full bg-brand text-white px-8 py-3 font-bold text-lg card-shadow"
         >
-          再玩一次
+          開始測試
         </button>
       </div>
     );
   }
 
-  const fillCorrect =
-    input.trim().toLowerCase() === current.fillAnswer.trim().toLowerCase();
-  const canNext = choiceDone && fillDone;
+  // ---- 結果頁 ----
+  if (done) {
+    const score = questions.reduce(
+      (s, q, i) => s + (isQuestionCorrect(q, responses[i]) ? 1 : 0),
+      0,
+    );
+    const full = score === questions.length;
+    function restart() {
+      setStarted(false);
+      setIdx(0);
+      setResponses([]);
+      setPicked(null);
+      setInput("");
+      setDone(false);
+    }
+    return (
+      <div className="bg-white rounded-2xl p-6 card-shadow space-y-4">
+        <div className="text-center space-y-1">
+          <p className="text-xl font-extrabold text-brand">
+            {full ? "🎉 滿分！太棒了！" : "測驗完成！"}
+          </p>
+          <p className="text-lg">
+            得分 {score} / {questions.length}
+          </p>
+        </div>
 
-  function chooseOption(opt: string) {
-    if (choiceDone) return;
-    setPicked(opt);
-    setChoiceDone(true);
+        <div className="space-y-2">
+          {questions.map((q, i) => {
+            const r = responses[i] ?? { choice: null, fill: "" };
+            const choiceOk = r.choice === q.choiceAnswer;
+            const fillOk =
+              r.fill.trim().toLowerCase() === q.fillAnswer.trim().toLowerCase();
+            const ok = choiceOk && fillOk;
+            return (
+              <div
+                key={q.card.id}
+                className={`rounded-xl border-2 p-3 ${
+                  ok ? "border-green-200 bg-green-50" : "border-rose-200 bg-rose-50"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold">
+                    {i + 1}. {q.card.english_word}
+                  </span>
+                  <span>{ok ? "✅" : "❌"}</span>
+                </div>
+                <p className="text-sm text-slate-600">
+                  中文：{q.choiceAnswer}
+                  {!choiceOk && (
+                    <span className="text-rose-500">
+                      （你選：{r.choice ?? "未選"}）
+                    </span>
+                  )}
+                </p>
+                <p className="text-sm text-slate-600">
+                  拼字：{q.fillAnswer}
+                  {!fillOk && (
+                    <span className="text-rose-500">
+                      （你寫：{r.fill || "未填"}）
+                    </span>
+                  )}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="text-center">
+          <button
+            onClick={restart}
+            className="rounded-full bg-brand text-white px-6 py-2 font-bold"
+          >
+            再測一次
+          </button>
+        </div>
+      </div>
+    );
   }
 
-  function submitFill() {
-    if (fillDone) return;
-    setFillDone(true);
-  }
+  const canNext = picked !== null && input.trim() !== "";
 
   function next() {
-    const ok =
-      picked === current.choiceAnswer &&
-      input.trim().toLowerCase() === current.fillAnswer.trim().toLowerCase();
-    if (ok) {
-      scoreRef.current += 1;
-      setScore(scoreRef.current);
-    } else {
-      onWrong?.(current.card);
-    }
+    const r: Response = { choice: picked, fill: input };
+    const newResponses = [...responses];
+    newResponses[idx] = r;
+    setResponses(newResponses);
+
     if (idx + 1 >= questions.length) {
+      // 結算：算分、回報錯題
+      const score = questions.reduce(
+        (s, q, i) => s + (isQuestionCorrect(q, newResponses[i]) ? 1 : 0),
+        0,
+      );
+      questions.forEach((q, i) => {
+        if (!isQuestionCorrect(q, newResponses[i])) onWrong?.(q.card);
+      });
       setDone(true);
+      onComplete?.(score, questions.length);
     } else {
       setIdx((i) => i + 1);
       setPicked(null);
-      setChoiceDone(false);
       setInput("");
-      setFillDone(false);
     }
   }
 
@@ -176,7 +238,7 @@ export default function ListeningTest({
         <span>
           第 {idx + 1} / {questions.length} 題
         </span>
-        <span>得分 {score}</span>
+        <span>作答中…完成後看結果</span>
       </div>
 
       <div className="flex gap-2">
@@ -194,99 +256,63 @@ export default function ListeningTest({
         </button>
       </div>
 
-      {/* 第一步：選正確的中文意思 */}
+      {/* 第一步：選中文 */}
       <div>
         <p className="font-bold text-slate-600 mb-2">1. 聽發音，選出正確的中文意思：</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {current.options.map((opt) => {
-            const correct = opt === current.choiceAnswer;
-            const cls = !choiceDone
-              ? "bg-white border-slate-200 hover:border-brand"
-              : correct
-                ? "bg-green-50 border-green-400 text-green-700"
-                : opt === picked
-                  ? "bg-rose-50 border-rose-400 text-rose-600"
-                  : "bg-white border-slate-200 opacity-60";
-            return (
-              <button
-                key={opt}
-                onClick={() => chooseOption(opt)}
-                disabled={choiceDone}
-                className={`rounded-xl border-2 px-4 py-3 font-bold text-left ${cls}`}
-              >
-                {opt}
-                {choiceDone && correct && " ✓"}
-                {choiceDone && !correct && opt === picked && " ✗"}
-              </button>
-            );
-          })}
+          {current.options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => setPicked(opt)}
+              className={`rounded-xl border-2 px-4 py-3 font-bold text-left ${
+                picked === opt
+                  ? "border-brand bg-violet-50 text-brand"
+                  : "border-slate-200 bg-white hover:border-brand"
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* 第二步：拼出英文單字（選完中文後才出現） */}
-      {choiceDone && (
-        <div className="border-t border-slate-100 pt-3">
-          {current.fromSentence ? (
-            <>
-              <p className="font-bold text-slate-600 mb-2">2. 填入句子缺少的單字：</p>
-              <p className="text-slate-800 leading-relaxed mb-2">{current.blanked}</p>
-            </>
-          ) : (
-            <p className="font-bold text-slate-600 mb-2">
-              2. 依發音與中文意思「{current.card.word_meaning_zh}」，拼出英文單字：
-            </p>
-          )}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              submitFill();
-            }}
-            className="flex gap-2"
-          >
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={fillDone}
-              autoFocus
-              placeholder="在這裡輸入單字"
-              className={`flex-1 rounded-lg border-2 px-3 py-2 ${
-                fillDone
-                  ? fillCorrect
-                    ? "border-green-400 bg-green-50"
-                    : "border-rose-400 bg-rose-50"
-                  : "border-slate-200"
-              }`}
-            />
-            {!fillDone && (
-              <button
-                type="submit"
-                className="rounded-full bg-brand text-white px-5 py-2 font-bold"
-              >
-                送出
-              </button>
-            )}
-          </form>
-          {fillDone && !fillCorrect && (
-            <p className="text-sm text-rose-500 mt-1">
-              正確答案：<span className="font-bold">{current.fillAnswer}</span>
-            </p>
-          )}
-        </div>
-      )}
-
-      {canNext && (
-        <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-          <p className="text-sm text-slate-500">
-            {current.card.english_word}　{current.card.word_meaning_zh}
+      {/* 第二步：拼單字 */}
+      <div className="border-t border-slate-100 pt-3">
+        {current.fromSentence ? (
+          <>
+            <p className="font-bold text-slate-600 mb-2">2. 填入句子缺少的單字：</p>
+            <p className="text-slate-800 leading-relaxed mb-2">{current.blanked}</p>
+          </>
+        ) : (
+          <p className="font-bold text-slate-600 mb-2">
+            2. 依發音與中文意思「{current.card.word_meaning_zh}」，拼出英文單字：
           </p>
-          <button
-            onClick={next}
-            className="rounded-full bg-brand text-white px-6 py-2 font-bold"
-          >
-            {idx + 1 >= questions.length ? "看結果" : "下一題"}
-          </button>
-        </div>
-      )}
+        )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (canNext) next();
+          }}
+        >
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            autoFocus
+            placeholder="在這裡輸入單字"
+            className="w-full rounded-lg border-2 border-slate-200 px-3 py-2"
+          />
+        </form>
+      </div>
+
+      <div className="flex justify-end border-t border-slate-100 pt-3">
+        <button
+          onClick={next}
+          disabled={!canNext}
+          className="rounded-full bg-brand text-white px-6 py-2 font-bold disabled:opacity-40"
+        >
+          {idx + 1 >= questions.length ? "完成測試" : "下一題"}
+        </button>
+      </div>
     </div>
   );
 }
