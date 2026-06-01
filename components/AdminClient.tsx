@@ -377,6 +377,19 @@ function UsersPanel() {
     void load();
   }
 
+  async function editTestCount(u: AdminUser) {
+    const s = prompt(`設定「${u.username}」的測驗次數：`, String(u.testCount));
+    if (s === null) return;
+    const count = parseInt(s, 10);
+    if (Number.isNaN(count)) return;
+    await fetch("/api/admin/student", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "setTestCount", userId: u.id, count }),
+    });
+    void load();
+  }
+
   async function clearMistakes(u: AdminUser) {
     if (!confirm(`清空「${u.username}」的所有錯字記錄？`)) return;
     await fetch("/api/admin/student", {
@@ -468,6 +481,12 @@ function UsersPanel() {
                             className="text-emerald-500 hover:underline"
                           >
                             改進度
+                          </button>
+                          <button
+                            onClick={() => editTestCount(u)}
+                            className="text-sky-500 hover:underline"
+                          >
+                            改次數
                           </button>
                           <button
                             onClick={() => clearMistakes(u)}

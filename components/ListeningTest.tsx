@@ -73,7 +73,8 @@ export default function ListeningTest({
   onComplete?: (score: number, total: number) => void;
   onWrong?: (card: WordCardRow) => void;
 }) {
-  const questions = useMemo(() => buildQuestions(cards), [cards]);
+  const [round, setRound] = useState(0);
+  const questions = useMemo(() => buildQuestions(cards), [cards, round]);
 
   const [started, setStarted] = useState(false);
   const [idx, setIdx] = useState(0);
@@ -118,7 +119,10 @@ export default function ListeningTest({
           作答過程不會顯示對錯，完成最後一題後一次看結果。
         </p>
         <button
-          onClick={() => setStarted(true)}
+          onClick={() => {
+            setRound((r) => r + 1);
+            setStarted(true);
+          }}
           className="rounded-full bg-brand text-white px-8 py-3 font-bold text-lg card-shadow"
         >
           開始測試

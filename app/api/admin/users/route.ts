@@ -29,7 +29,8 @@ export async function GET() {
     .select("user_id");
   const { data: tests } = await admin
     .from("test_results")
-    .select("user_id, score, total, kind, created_at")
+    .select("user_id, kind, created_at")
+    .eq("kind", "quiz")
     .order("created_at", { ascending: false });
 
   const pMap = new Map((progress ?? []).map((p) => [p.user_id, p]));
