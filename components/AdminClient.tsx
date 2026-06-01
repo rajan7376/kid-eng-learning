@@ -1,0 +1,482 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import type { ClassRow, WeekRow, WordCardRow } from "@/lib/types";
+
+interface Props {
+  classes: ClassRow[];
+  weeks: WeekRow[];
+}
+
+interface AdminUser {
+  id: string;
+  username: string;
+  role: string;
+  display_name: string | null;
+  points: number;
+  unlockedCount: number;
+  mistakeCount: number;
+  testCount: number;
+  lastTest: string | null;
+}
+
+async function dataOp(op: string, id?: string, values?: Record<string, unknown>) {
+  await fetch("/api/admin/data", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ op, id, values }),
+  });
+}
+
+export default function AdminClient({ classes, weeks }: Props) {
+  const router = useRouter();
+  const supabase = createClient();
+  const [tab, setTab] = useState<"data" | "users">("data");
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-extrabold text-brand">管理後台</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setTab("data")}
+            className={`rounded-full px-4 py-1 font-bold text-sm ${
+              tab === "data" ? "bg-brand text-white" : "bg-violet-50 text-brand"
+            }`}
+          >
+            資料管理
+          </button>
+          <button
+            onClick={() => setTab("users")}
+            className={`rounded-full px-4 py-1 font-bold text-sm ${
+              tab === "users" ? "bg-brand text-white" : "bg-violet-50 text-brand"
+            }`}
+          >
+            帳號管理
+          </button>
+          <button
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" });
+              router.push("/login");
+              router.refresh();
+            }}
+            className="rounded-full px-4 py-1 font-bold text-sm bg-slate-100 text-slate-600"
+          >
+            登出
+          </button>
+        </div>
+      </div>
+
+      {tab === "data" ? (
+        <DataPanel supabase={supabase} classes={classes} weeks={weeks} />
+      ) : (
+        <UsersPanel />
+      )}
+    </div>
+  );
+}
+
+function DataPanel({
+  supabase,
+  classes,
+  weeks,
+}: {
+  supabase: ReturnType<typeof createClient>;
+  classes: ClassRow[];
+  weeks: WeekRow[];
+}) {
+  const router = useRouter();
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [log, setLog] = useState<string | null>(null);
+  const [openWeek, setOpenWeek] = useState<string | null>(null);
+  const [cards, setCards] = useState<WordCardRow[]>([]);
+
+  async function upload(e: React.FormEvent) {
+    e.preventDefault();
+    if (!file) return;
+    setBusy(true);
+    setLog("上傳並分析中…（首次可能數十秒）");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/analyze", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "分析失敗");
+      setLog(
+        `完成！${json.handout.class_code}・${json.handout.week_label}，共 ${json.handout.cards.length} 張卡片。`,
+      );
+      router.refresh();
+    } catch (err) {
+      setLog(err instanceof Error ? err.message : "發生錯誤");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadCards(weekId: string) {
+    if (openWeek === weekId) {
+      setOpenWeek(null);
+      return;
+    }
+    setOpenWeek(weekId);
+    const { data } = await supabase
+      .from("word_cards")
+      .select("*")
+      .eq("week_id", weekId)
+      .order("sort_order", { ascending: true });
+    setCards((data ?? []) as WordCardRow[]);
+  }
+
+  return (
+    <div className="space-y-6">
+      <form onSubmit={upload} className="bg-white rounded-2xl p-6 card-shadow space-y-3">
+        <h2 className="font-bold text-lg">上傳講義</h2>
+        <p className="text-sm text-slate-500">支援 JPG / PNG / PDF / WORD，AI 自動建立班級/週次/單字。</p>
+        <input
+          type="file"
+          accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="block w-full text-sm"
+        />
+        <button
+          type="submit"
+          disabled={!file || busy}
+          className="rounded-full bg-brand text-white px-6 py-2 font-bold disabled:opacity-50"
+        >
+          {busy ? "分析中…" : "上傳並分析"}
+        </button>
+        {log && <p className="text-sm text-slate-600">{log}</p>}
+      </form>
+
+      <div className="bg-white rounded-2xl p-6 card-shadow space-y-4">
+        <h2 className="font-bold text-lg">班級 / 週次 / 單字</h2>
+        {classes.length === 0 && (
+          <p className="text-sm text-slate-400">尚無資料，先上傳一份講義。</p>
+        )}
+        {classes.map((c) => (
+          <div key={c.id} className="border border-slate-100 rounded-xl p-3">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-brand">{c.code}</span>
+              <button
+                onClick={async () => {
+                  if (!confirm(`刪除班級 ${c.code} 及其所有週次/單字？`)) return;
+                  await dataOp("deleteClass", c.id);
+                  router.refresh();
+                }}
+                className="text-xs text-rose-400 hover:underline"
+              >
+                刪除班級
+              </button>
+            </div>
+            <div className="mt-2 space-y-2">
+              {weeks
+                .filter((w) => w.class_id === c.id)
+                .map((w) => (
+                  <div key={w.id} className="rounded-lg bg-violet-50 p-2">
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => loadCards(w.id)}
+                        className="font-bold text-slate-700"
+                      >
+                        {w.week_label}
+                        {w.date_range ? ` (${w.date_range})` : ""}{" "}
+                        {openWeek === w.id ? "▲" : "▼"}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm("刪除此週次及其單字？")) return;
+                          await dataOp("deleteWeek", w.id);
+                          if (openWeek === w.id) setOpenWeek(null);
+                          router.refresh();
+                        }}
+                        className="text-xs text-rose-400 hover:underline"
+                      >
+                        刪除週次
+                      </button>
+                    </div>
+                    {openWeek === w.id && (
+                      <div className="mt-2 space-y-2">
+                        {cards.map((card) => (
+                          <CardEditor
+                            key={card.id}
+                            card={card}
+                            onDeleted={() =>
+                              setCards((cs) => cs.filter((x) => x.id !== card.id))
+                            }
+                          />
+                        ))}
+                        {cards.length === 0 && (
+                          <p className="text-xs text-slate-400">此週次沒有單字。</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CardEditor({
+  card,
+  onDeleted,
+}: {
+  card: WordCardRow;
+  onDeleted: () => void;
+}) {
+  const [v, setV] = useState({
+    english_word: card.english_word,
+    part_of_speech: card.part_of_speech ?? "",
+    word_meaning_zh: card.word_meaning_zh ?? "",
+    sentence: card.sentence ?? "",
+    sentence_zh: card.sentence_zh ?? "",
+  });
+  const [saved, setSaved] = useState(false);
+
+  const field = (k: keyof typeof v, ph: string) => (
+    <input
+      value={v[k]}
+      placeholder={ph}
+      onChange={(e) => {
+        setV({ ...v, [k]: e.target.value });
+        setSaved(false);
+      }}
+      className="rounded border border-slate-200 px-2 py-1 text-sm"
+    />
+  );
+
+  return (
+    <div className="bg-white rounded-lg p-2 flex flex-wrap items-center gap-2">
+      {field("english_word", "單字")}
+      {field("part_of_speech", "詞性")}
+      {field("word_meaning_zh", "詞義")}
+      {field("sentence", "例句")}
+      {field("sentence_zh", "翻譯")}
+      <button
+        onClick={async () => {
+          await dataOp("updateCard", card.id, v);
+          setSaved(true);
+        }}
+        className="rounded-full bg-brand text-white px-3 py-1 text-xs font-bold"
+      >
+        {saved ? "已存✓" : "儲存"}
+      </button>
+      <button
+        onClick={async () => {
+          if (!confirm("刪除這個單字？")) return;
+          await dataOp("deleteCard", card.id);
+          onDeleted();
+        }}
+        className="text-xs text-rose-400 hover:underline"
+      >
+        刪除
+      </button>
+    </div>
+  );
+}
+
+function UsersPanel() {
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({
+    username: "",
+    password: "",
+    role: "student",
+    display_name: "",
+  });
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    const res = await fetch("/api/admin/users");
+    const data = await res.json();
+    setUsers(data.users ?? []);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    const res = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setMsg(data.error || "建立失敗");
+      return;
+    }
+    setForm({ username: "", password: "", role: "student", display_name: "" });
+    void load();
+  }
+
+  async function resetPw(u: AdminUser) {
+    const pw = prompt(`為「${u.username}」設定新密碼：`);
+    if (!pw) return;
+    await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: u.id, password: pw }),
+    });
+    alert("已更新密碼");
+  }
+
+  async function remove(u: AdminUser) {
+    if (!confirm(`刪除帳號 ${u.username}？其學習紀錄也會一併刪除。`)) return;
+    await fetch(`/api/admin/users?id=${u.id}`, { method: "DELETE" });
+    void load();
+  }
+
+  async function editProgress(u: AdminUser) {
+    const pStr = prompt(`設定「${u.username}」的點數：`, String(u.points));
+    if (pStr === null) return;
+    const points = parseInt(pStr, 10);
+    if (Number.isNaN(points)) return;
+    const uStr = prompt(
+      `設定解鎖動物數(0~∞，留空=依點數自動 ${Math.floor(points / 5)})：`,
+      "",
+    );
+    const body: Record<string, unknown> = { op: "setProgress", userId: u.id, points };
+    if (uStr && uStr.trim() !== "") body.unlockedCount = parseInt(uStr, 10);
+    await fetch("/api/admin/student", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    void load();
+  }
+
+  async function clearMistakes(u: AdminUser) {
+    if (!confirm(`清空「${u.username}」的所有錯字記錄？`)) return;
+    await fetch("/api/admin/student", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "clearMistakes", userId: u.id }),
+    });
+    void load();
+  }
+
+  return (
+    <div className="space-y-6">
+      <form onSubmit={create} className="bg-white rounded-2xl p-6 card-shadow space-y-3">
+        <h2 className="font-bold text-lg">新增帳號</h2>
+        <div className="flex flex-wrap gap-2">
+          <input
+            required
+            placeholder="帳號"
+            value={form.username}
+            onChange={(e) => setForm({ ...form, username: e.target.value })}
+            className="rounded border border-slate-200 px-3 py-2"
+          />
+          <input
+            required
+            placeholder="密碼"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            className="rounded border border-slate-200 px-3 py-2"
+          />
+          <input
+            placeholder="顯示名稱(選填)"
+            value={form.display_name}
+            onChange={(e) => setForm({ ...form, display_name: e.target.value })}
+            className="rounded border border-slate-200 px-3 py-2"
+          />
+          <select
+            value={form.role}
+            onChange={(e) => setForm({ ...form, role: e.target.value })}
+            className="rounded border border-slate-200 px-3 py-2"
+          >
+            <option value="student">學生</option>
+            <option value="admin">管理員</option>
+          </select>
+          <button
+            type="submit"
+            className="rounded-full bg-brand text-white px-6 py-2 font-bold"
+          >
+            建立
+          </button>
+        </div>
+        {msg && <p className="text-sm text-rose-500">{msg}</p>}
+      </form>
+
+      <div className="bg-white rounded-2xl p-6 card-shadow">
+        <h2 className="font-bold text-lg mb-3">帳號清單</h2>
+        {loading ? (
+          <p className="text-slate-400">載入中…</p>
+        ) : (
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-slate-400">
+                <tr>
+                  <th className="py-1">帳號</th>
+                  <th>角色</th>
+                  <th>點數</th>
+                  <th>解鎖</th>
+                  <th>錯字</th>
+                  <th>測驗次數</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-t border-slate-100">
+                    <td className="py-2 font-semibold">
+                      {u.username}
+                      {u.display_name ? `（${u.display_name}）` : ""}
+                    </td>
+                    <td>{u.role === "admin" ? "管理員" : "學生"}</td>
+                    <td>{u.role === "admin" ? "—" : u.points}</td>
+                    <td>{u.role === "admin" ? "—" : u.unlockedCount}</td>
+                    <td>{u.role === "admin" ? "—" : u.mistakeCount}</td>
+                    <td>{u.role === "admin" ? "—" : u.testCount}</td>
+                    <td className="space-x-2 whitespace-nowrap">
+                      {u.role !== "admin" && (
+                        <>
+                          <button
+                            onClick={() => editProgress(u)}
+                            className="text-emerald-500 hover:underline"
+                          >
+                            改進度
+                          </button>
+                          <button
+                            onClick={() => clearMistakes(u)}
+                            className="text-amber-500 hover:underline"
+                          >
+                            清錯字
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => resetPw(u)}
+                        className="text-brand hover:underline"
+                      >
+                        改密碼
+                      </button>
+                      <button
+                        onClick={() => remove(u)}
+                        className="text-rose-400 hover:underline"
+                      >
+                        刪除
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
