@@ -6,6 +6,12 @@
   --font-rounded: "Nunito", "Comic Sans MS", system-ui, sans-serif;
 }
 
+html,
+body {
+  /* 關閉手機/平板下拉重整與過捲彈跳，避免測驗中誤觸重整 */
+  overscroll-behavior-y: none;
+}
+
 body {
   @apply bg-gradient-to-b from-violet-50 via-white to-sky-50 text-slate-800 min-h-screen;
 }

@@ -80,6 +80,18 @@ export default function ListeningTest({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx]);
 
+  // 測驗進行中阻止意外重整/離開
+  useEffect(() => {
+    const active = !done && (idx > 0 || choiceDone);
+    if (!active) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [done, idx, choiceDone]);
+
   useEffect(() => {
     if (done && !firedRef.current) {
       firedRef.current = true;
