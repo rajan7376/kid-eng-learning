@@ -106,7 +106,7 @@ export default function StudyClient({ classes, weeks }: Props) {
             {weekOptions.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.week_label}
-                {w.date_range ? ` ${w.date_range}` : ""}
+                {w.date_range ? ` (${w.date_range})` : ""}
               </option>
             ))}
           </select>
