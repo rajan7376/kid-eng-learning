@@ -96,7 +96,7 @@ export default function StudyClient({ classes, weeks }: Props) {
           </select>
         </label>
         <label className="flex-1 text-sm font-bold text-slate-600">
-          週次（最新在最上）
+          週次單字表
           <select
             value={weekId}
             onChange={(e) => setWeekId(e.target.value)}
