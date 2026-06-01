@@ -88,32 +88,40 @@ function DataPanel({
   weeks: WeekRow[];
 }) {
   const router = useRouter();
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
-  const [log, setLog] = useState<string | null>(null);
+  const [log, setLog] = useState<string[]>([]);
   const [openWeek, setOpenWeek] = useState<string | null>(null);
   const [cards, setCards] = useState<WordCardRow[]>([]);
 
   async function upload(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) return;
+    if (files.length === 0) return;
     setBusy(true);
-    setLog("上傳並分析中…（首次可能數十秒）");
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/analyze", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "分析失敗");
-      setLog(
-        `完成！${json.handout.class_code}・${json.handout.week_label}，共 ${json.handout.cards.length} 張卡片。`,
-      );
-      router.refresh();
-    } catch (err) {
-      setLog(err instanceof Error ? err.message : "發生錯誤");
-    } finally {
-      setBusy(false);
+    setLog([]);
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      setLog((l) => [...l, `(${i + 1}/${files.length}) ${f.name}：分析中…`]);
+      try {
+        const fd = new FormData();
+        fd.append("file", f);
+        const res = await fetch("/api/analyze", { method: "POST", body: fd });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "分析失敗");
+        setLog((l) => [
+          ...l.slice(0, -1),
+          `(${i + 1}/${files.length}) ${f.name}：✅ ${json.handout.class_code}・${json.handout.week_label}，${json.handout.cards.length} 張卡片`,
+        ]);
+      } catch (err) {
+        setLog((l) => [
+          ...l.slice(0, -1),
+          `(${i + 1}/${files.length}) ${f.name}：❌ ${err instanceof Error ? err.message : "發生錯誤"}`,
+        ]);
+      }
     }
+    setBusy(false);
+    setFiles([]);
+    router.refresh();
   }
 
   async function loadCards(weekId: string) {
@@ -134,21 +142,33 @@ function DataPanel({
     <div className="space-y-6">
       <form onSubmit={upload} className="bg-white rounded-2xl p-6 card-shadow space-y-3">
         <h2 className="font-bold text-lg">上傳講義</h2>
-        <p className="text-sm text-slate-500">支援 JPG / PNG / PDF / WORD，AI 自動建立班級/週次/單字。</p>
+        <p className="text-sm text-slate-500">
+          支援 JPG / PNG / PDF / WORD，可一次選多個檔案，AI 逐一分析建立班級/週次/單字。
+        </p>
         <input
           type="file"
+          multiple
           accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
           className="block w-full text-sm"
         />
+        {files.length > 0 && (
+          <p className="text-xs text-slate-400">已選 {files.length} 個檔案</p>
+        )}
         <button
           type="submit"
-          disabled={!file || busy}
+          disabled={files.length === 0 || busy}
           className="rounded-full bg-brand text-white px-6 py-2 font-bold disabled:opacity-50"
         >
-          {busy ? "分析中…" : "上傳並分析"}
+          {busy ? "分析中…" : `上傳並分析${files.length > 1 ? ` (${files.length})` : ""}`}
         </button>
-        {log && <p className="text-sm text-slate-600">{log}</p>}
+        {log.length > 0 && (
+          <ul className="text-sm text-slate-600 space-y-1">
+            {log.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        )}
       </form>
 
       <div className="bg-white rounded-2xl p-6 card-shadow space-y-4">

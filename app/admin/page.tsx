@@ -15,7 +15,7 @@ export default async function AdminPage() {
   const { data: weeks } = await supabase
     .from("weeks")
     .select("*")
-    .order("sort_order", { ascending: true });
+    .order("sort_order", { ascending: false });
 
   return (
     <AdminClient

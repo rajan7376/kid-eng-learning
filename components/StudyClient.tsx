@@ -78,13 +78,14 @@ export default function StudyClient({ classes, weeks }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end gap-4 bg-white rounded-2xl p-4 card-shadow">
-        <label className="text-sm font-bold text-slate-600">
+      {/* 上方獨立選單區：班級 / 週次 */}
+      <div className="flex flex-col sm:flex-row gap-3 bg-white rounded-2xl p-4 card-shadow">
+        <label className="flex-1 text-sm font-bold text-slate-600">
           班級
           <select
             value={classId}
             onChange={(e) => setClassId(e.target.value)}
-            className="block mt-1 rounded-lg border border-slate-200 px-3 py-2"
+            className="block mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
           >
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
@@ -94,12 +95,12 @@ export default function StudyClient({ classes, weeks }: Props) {
             ))}
           </select>
         </label>
-        <label className="text-sm font-bold text-slate-600">
-          週次
+        <label className="flex-1 text-sm font-bold text-slate-600">
+          週次（最新在最上）
           <select
             value={weekId}
             onChange={(e) => setWeekId(e.target.value)}
-            className="block mt-1 rounded-lg border border-slate-200 px-3 py-2"
+            className="block mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
           >
             {weekOptions.length === 0 && <option value="">（無）</option>}
             {weekOptions.map((w) => (
@@ -110,57 +111,35 @@ export default function StudyClient({ classes, weeks }: Props) {
             ))}
           </select>
         </label>
+      </div>
 
-        <div className="ml-auto flex flex-wrap rounded-full bg-violet-50 p-1">
-          <button
-            onClick={() => setMode("cards")}
-            className={`px-4 py-1 rounded-full text-sm font-bold ${
-              mode === "cards" ? "bg-brand text-white" : "text-brand"
-            }`}
-          >
-            單字卡
-          </button>
-          <button
-            onClick={() => setMode("test")}
-            disabled={cards.length === 0}
-            className={`px-4 py-1 rounded-full text-sm font-bold disabled:opacity-40 ${
-              mode === "test" ? "bg-brand text-white" : "text-brand"
-            }`}
-          >
-            聽力測驗
-          </button>
-          <button
-            onClick={() => setMode("boss")}
-            className={`px-4 py-1 rounded-full text-sm font-bold ${
-              mode === "boss" ? "bg-brand text-white" : "text-brand"
-            }`}
-          >
-            👹 錯字大魔王{student.mistakes.length > 0 ? ` (${student.mistakes.length})` : ""}
-          </button>
-          <button
-            onClick={() => setMode("zoo")}
-            className={`px-4 py-1 rounded-full text-sm font-bold ${
-              mode === "zoo" ? "bg-brand text-white" : "text-brand"
-            }`}
-          >
-            🦁 我的動物園
-          </button>
-          <button
-            onClick={() => setMode("visit")}
-            className={`px-4 py-1 rounded-full text-sm font-bold ${
-              mode === "visit" ? "bg-brand text-white" : "text-brand"
-            }`}
-          >
-            🌍 逛動物園
-          </button>
-          <button
-            onClick={() => setMode("rank")}
-            className={`px-4 py-1 rounded-full text-sm font-bold ${
-              mode === "rank" ? "bg-brand text-white" : "text-brand"
-            }`}
-          >
-            🏆 排行榜
-          </button>
+      {/* 功能分頁：手機可橫向捲動 */}
+      <div className="-mx-4 px-4 overflow-x-auto">
+        <div className="flex w-max gap-1 rounded-full bg-violet-50 p-1">
+          {(
+            [
+              { k: "cards", label: "單字卡" },
+              { k: "test", label: "聽力測驗", disabled: cards.length === 0 },
+              {
+                k: "boss",
+                label: `👹 錯字大魔王${student.mistakes.length > 0 ? ` (${student.mistakes.length})` : ""}`,
+              },
+              { k: "zoo", label: "🦁 我的動物園" },
+              { k: "visit", label: "🌍 逛動物園" },
+              { k: "rank", label: "🏆 排行榜" },
+            ] as { k: typeof mode; label: string; disabled?: boolean }[]
+          ).map((t) => (
+            <button
+              key={t.k}
+              onClick={() => setMode(t.k)}
+              disabled={t.disabled}
+              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-40 ${
+                mode === t.k ? "bg-brand text-white" : "text-brand"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 

@@ -13,7 +13,7 @@ export default async function StudyPage() {
   const { data: weeks } = await supabase
     .from("weeks")
     .select("*")
-    .order("sort_order", { ascending: true });
+    .order("sort_order", { ascending: false });
 
   return (
     <div>
