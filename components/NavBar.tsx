@@ -43,11 +43,9 @@ export default function NavBar({ session }: { session: Session | null }) {
 
   const links = session ? (
     <>
-      {session.role !== "parent" && (
-        <Link href="/study" className="hover:text-brand" onClick={() => setMenuOpen(false)}>
-          學習
-        </Link>
-      )}
+      <Link href="/study" className="hover:text-brand" onClick={() => setMenuOpen(false)}>
+        學習
+      </Link>
       {(session.role === "parent" || session.role === "admin") && (
         <Link
           href="/parent"
