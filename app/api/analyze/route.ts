@@ -21,8 +21,8 @@ function normalizeWeekLabel(raw: string): string {
 
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session || session.role !== "admin") {
-    return NextResponse.json({ error: "需要管理員權限" }, { status: 403 });
+  if (!session || (session.role !== "admin" && session.role !== "parent")) {
+    return NextResponse.json({ error: "需要管理員或家長權限" }, { status: 403 });
   }
 
   const form = await req.formData();

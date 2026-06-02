@@ -40,7 +40,13 @@ export default function LoginPage() {
       const data = await res.json();
       if (res.ok) {
         const next = params.get("next");
-        router.push(data.role === "admin" ? "/admin" : next || "/study");
+        const dest =
+          data.role === "admin"
+            ? "/admin"
+            : data.role === "parent"
+              ? "/parent"
+              : next || "/study";
+        router.push(dest);
         router.refresh();
         return;
       }

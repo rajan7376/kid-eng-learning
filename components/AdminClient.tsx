@@ -431,6 +431,7 @@ function UsersPanel() {
             className="rounded border border-slate-200 px-3 py-2"
           >
             <option value="student">學生</option>
+            <option value="parent">家長</option>
             <option value="admin">管理員</option>
           </select>
           <button
@@ -468,13 +469,19 @@ function UsersPanel() {
                       {u.username}
                       {u.display_name ? `（${u.display_name}）` : ""}
                     </td>
-                    <td>{u.role === "admin" ? "管理員" : "學生"}</td>
-                    <td>{u.role === "admin" ? "—" : u.points}</td>
-                    <td>{u.role === "admin" ? "—" : u.unlockedCount}</td>
-                    <td>{u.role === "admin" ? "—" : u.mistakeCount}</td>
-                    <td>{u.role === "admin" ? "—" : u.testCount}</td>
+                    <td>
+                      {u.role === "admin"
+                        ? "管理員"
+                        : u.role === "parent"
+                          ? "家長"
+                          : "學生"}
+                    </td>
+                    <td>{u.role === "student" ? u.points : "—"}</td>
+                    <td>{u.role === "student" ? u.unlockedCount : "—"}</td>
+                    <td>{u.role === "student" ? u.mistakeCount : "—"}</td>
+                    <td>{u.role === "student" ? u.testCount : "—"}</td>
                     <td className="space-x-2 whitespace-nowrap">
-                      {u.role !== "admin" && (
+                      {u.role === "student" && (
                         <>
                           <button
                             onClick={() => editProgress(u)}

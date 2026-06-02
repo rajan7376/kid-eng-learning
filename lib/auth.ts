@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 
 export const SESSION_COOKIE = "kel_session";
-export type Role = "admin" | "student";
+export type Role = "admin" | "parent" | "student";
 
 export interface SessionPayload {
   sub: string; // user id

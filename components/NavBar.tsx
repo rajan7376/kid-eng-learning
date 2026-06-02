@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 interface Session {
-  role: "admin" | "student";
+  role: "admin" | "parent" | "student";
   name: string;
 }
 
@@ -43,9 +43,20 @@ export default function NavBar({ session }: { session: Session | null }) {
 
   const links = session ? (
     <>
-      <Link href="/study" className="hover:text-brand" onClick={() => setMenuOpen(false)}>
-        學習
-      </Link>
+      {session.role !== "parent" && (
+        <Link href="/study" className="hover:text-brand" onClick={() => setMenuOpen(false)}>
+          學習
+        </Link>
+      )}
+      {(session.role === "parent" || session.role === "admin") && (
+        <Link
+          href="/parent"
+          className="hover:text-brand"
+          onClick={() => setMenuOpen(false)}
+        >
+          上傳講義
+        </Link>
+      )}
       {session.role === "admin" && (
         <Link href="/admin" className="hover:text-brand" onClick={() => setMenuOpen(false)}>
           管理後台

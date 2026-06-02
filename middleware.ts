@@ -8,7 +8,7 @@ export async function middleware(req: NextRequest) {
   const needAuth =
     pathname.startsWith("/study") ||
     pathname.startsWith("/admin") ||
-    pathname.startsWith("/upload");
+    pathname.startsWith("/parent");
 
   if (needAuth && !session) {
     const url = req.nextUrl.clone();
@@ -23,9 +23,24 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (
+    pathname.startsWith("/parent") &&
+    session?.role !== "parent" &&
+    session?.role !== "admin"
+  ) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/study";
+    return NextResponse.redirect(url);
+  }
+
   if (pathname === "/login" && session) {
     const url = req.nextUrl.clone();
-    url.pathname = session.role === "admin" ? "/admin" : "/study";
+    url.pathname =
+      session.role === "admin"
+        ? "/admin"
+        : session.role === "parent"
+          ? "/parent"
+          : "/study";
     return NextResponse.redirect(url);
   }
 

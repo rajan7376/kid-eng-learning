@@ -84,7 +84,9 @@ export async function POST(req: Request) {
   const { error } = await admin.from("app_users").insert({
     username,
     password_hash,
-    role: role === "admin" ? "admin" : "student",
+    role: ["admin", "parent", "student"].includes(role ?? "")
+      ? role
+      : "student",
     display_name: display_name || null,
   });
   if (error)
@@ -108,7 +110,7 @@ export async function PATCH(req: Request) {
   const update: Record<string, unknown> = {};
   if (password) update.password_hash = await hashPassword(password);
   if (display_name !== undefined) update.display_name = display_name;
-  if (role) update.role = role === "admin" ? "admin" : "student";
+  if (role && ["admin", "parent", "student"].includes(role)) update.role = role;
   if (Object.keys(update).length === 0)
     return NextResponse.json({ error: "沒有要更新的欄位" }, { status: 400 });
 
