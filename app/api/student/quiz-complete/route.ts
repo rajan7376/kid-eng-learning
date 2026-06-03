@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/authServer";
 import { CREATURE_COUNT, POINTS_PER_CREATURE } from "@/lib/creatures";
-import { MAX_WEEK_POINTS } from "@/lib/rules";
+import { MAX_WEEK_POINTS, taipeiToday } from "@/lib/rules";
+import {
+  computeCareView,
+  grantBroomDaily,
+  grantFeedDaily,
+  normalizeCare,
+} from "@/lib/careServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,7 +70,7 @@ export async function POST(req: Request) {
     .upsert({ user_id: session.sub }, { onConflict: "user_id", ignoreDuplicates: true });
   const { data: cur } = await admin
     .from("student_progress")
-    .select("points, unlocked_count")
+    .select("points, unlocked_count, care")
     .eq("user_id", session.sub)
     .maybeSingle();
 
@@ -74,12 +80,26 @@ export async function POST(req: Request) {
     Math.floor(points / POINTS_PER_CREATURE),
     CREATURE_COUNT,
   );
-  if (awarded > 0) {
-    await admin
-      .from("student_progress")
-      .update({ points, unlocked_count: unlockedCount, updated_at: new Date().toISOString() })
-      .eq("user_id", session.sub);
-  }
+
+  // 完成測驗每天發 1 飼料；若沒有錯字(無法打大魔王拿掃把)則一併補掃把
+  const today = taipeiToday();
+  const { care } = normalizeCare(cur?.care ?? {}, today, unlockedCount > 0);
+  grantFeedDaily(care, today);
+  const { count: mistakeCount } = await admin
+    .from("student_mistakes")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", session.sub);
+  if (!mistakeCount) grantBroomDaily(care, today);
+
+  await admin
+    .from("student_progress")
+    .update({
+      points,
+      unlocked_count: unlockedCount,
+      care,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", session.sub);
 
   return NextResponse.json({
     fullMark,
@@ -88,5 +108,6 @@ export async function POST(req: Request) {
     points,
     unlockedCount,
     prevUnlocked,
+    care: computeCareView(care, today),
   });
 }

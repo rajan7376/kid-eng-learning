@@ -2,9 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Creature } from "@/lib/creatures";
-import type { ZooPositions } from "@/lib/useStudent";
+import type { CareView, ZooPositions } from "@/lib/useStudent";
 
 const TOKEN = 48;
+
+const MOOD: Record<CareView["hungerStage"], string> = {
+  ok: "😋",
+  warn: "😟",
+  sick: "🤢",
+  away: "🏃",
+};
 
 interface Pos {
   x: number;
@@ -17,16 +24,36 @@ export default function Zoo({
   onSave,
   readOnly = false,
   title = "🦁 我的動物園",
+  care,
+  onFeed,
+  onClean,
 }: {
   collection: Creature[];
   positions: ZooPositions;
   onSave?: (positions: ZooPositions) => void;
   readOnly?: boolean;
   title?: string;
+  care?: CareView | null;
+  onFeed?: () => Promise<{ ok: boolean; error?: string }>;
+  onClean?: () => Promise<{ ok: boolean; error?: string }>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<ZooPositions>(positions);
   const drag = useRef<{ i: number; dx: number; dy: number } | null>(null);
+  const [msg, setMsg] = useState("");
+
+  const severity = ["away", "sick", "warn", "ok"] as const;
+  const worst: CareView["hungerStage"] = care
+    ? severity.find((s) => care.hungerStage === s || care.messStage === s) ?? "ok"
+    : "ok";
+  const away = !!care?.away;
+  const showCare = !!care && !readOnly && collection.length > 0;
+
+  async function act(fn?: () => Promise<{ ok: boolean; error?: string }>, okMsg = "") {
+    if (!fn) return;
+    const r = await fn();
+    setMsg(r.ok ? okMsg : r.error ?? "");
+  }
 
   useEffect(() => {
     setPos(positions);
@@ -85,6 +112,51 @@ export default function Zoo({
           拖曳動物，把牠們放到動物園裡喜歡的位置吧！🐾
         </p>
       )}
+
+      {showCare && care && (
+        <div className="bg-white rounded-2xl p-3 card-shadow space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-slate-700">
+              {MOOD[worst]} 動物心情：
+              {worst === "ok"
+                ? "開心"
+                : worst === "warn"
+                  ? "需要照顧"
+                  : worst === "sick"
+                    ? "生病了"
+                    : "離家出走"}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => act(onFeed, "餵食成功，動物吃飽飽！🥰")}
+              disabled={care.fedToday || care.feed < 1}
+              className="flex-1 rounded-full bg-amber-100 text-amber-700 px-3 py-2 font-bold disabled:opacity-40"
+            >
+              🥕 餵食（{care.feed}）
+            </button>
+            <button
+              onClick={() => act(onClean, "打掃完成，動物園好乾淨！✨")}
+              disabled={care.cleanedToday || care.broom < 1}
+              className="flex-1 rounded-full bg-sky-100 text-sky-700 px-3 py-2 font-bold disabled:opacity-40"
+            >
+              🧹 打掃（{care.broom}）
+            </button>
+          </div>
+          <p className="text-xs text-slate-400">
+            {away
+              ? "動物們離家出走了！今天餵食＋打掃就會把牠們找回來～"
+              : [
+                  care.fedToday ? "今天餵過了" : `已 ${care.daysSinceFed} 天沒餵食`,
+                  care.cleanedToday ? "今天打掃過了" : `已 ${care.daysSinceCleaned} 天沒打掃`,
+                ].join("・")}
+          </p>
+          <p className="text-[11px] text-slate-300">
+            飼料來自每天完成測驗、掃把來自每天複習錯字大魔王；連續 3 天沒照顧會生病，7 天會離家。
+          </p>
+          {msg && <p className="text-xs text-brand font-bold">{msg}</p>}
+        </div>
+      )}
       <div
         ref={ref}
         onPointerMove={onPointerMove}
@@ -118,7 +190,34 @@ export default function Zoo({
           </div>
         )}
 
-        {collection.map((c, i) => {
+        {/* 髒污：未打掃時出現便便 */}
+        {!readOnly &&
+          care &&
+          !away &&
+          care.messStage !== "ok" &&
+          collection.length > 0 && (
+            <div className="pointer-events-none absolute inset-0 text-2xl">
+              <span className="absolute bottom-10 left-10">💩</span>
+              <span className="absolute bottom-24 right-16">💩</span>
+              {care.messStage === "sick" && (
+                <span className="absolute bottom-16 left-1/2">💩</span>
+              )}
+            </div>
+          )}
+
+        {/* 離家出走 */}
+        {away && (
+          <div className="absolute inset-0 flex items-center justify-center text-center px-6">
+            <p className="bg-white/85 rounded-xl px-4 py-3 text-slate-600 font-bold">
+              🏃 動物們因為太久沒被照顧離家出走了…
+              <br />
+              今天「餵食」＋「打掃」就會把牠們找回來！
+            </p>
+          </div>
+        )}
+
+        {!away &&
+          collection.map((c, i) => {
           const p = pos[i] ?? defaultPos(i);
           return (
             <button

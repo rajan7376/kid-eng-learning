@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/authServer";
 import { CREATURE_COUNT, POINTS_PER_CREATURE } from "@/lib/creatures";
 import { GRADUATE_DAYS, ageDays, taipeiToday } from "@/lib/rules";
+import { computeCareView, grantBroomDaily, normalizeCare } from "@/lib/careServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +47,18 @@ export async function POST(req: Request) {
       .eq("user_id", session.sub)
       .eq("card_id", body.cardId);
 
+    // 讀進度 + 每日複習發 1 把掃把
+    await admin
+      .from("student_progress")
+      .upsert({ user_id: session.sub }, { onConflict: "user_id", ignoreDuplicates: true });
+    const { data: cur } = await admin
+      .from("student_progress")
+      .select("points, unlocked_count, care")
+      .eq("user_id", session.sub)
+      .maybeSingle();
+    const { care } = normalizeCare(cur?.care ?? {}, today, (cur?.unlocked_count ?? 0) > 0);
+    grantBroomDaily(care, today);
+
     const due = ageDays(m.created_at) >= GRADUATE_DAYS;
     if (body.correct && due) {
       // 畢業：移除錯字 + 記一次打敗大魔王 + 加 1 點
@@ -60,14 +73,6 @@ export async function POST(req: Request) {
         score: 1,
         total: 1,
       });
-      await admin
-        .from("student_progress")
-        .upsert({ user_id: session.sub }, { onConflict: "user_id", ignoreDuplicates: true });
-      const { data: cur } = await admin
-        .from("student_progress")
-        .select("points, unlocked_count")
-        .eq("user_id", session.sub)
-        .maybeSingle();
       const prevUnlocked = cur?.unlocked_count ?? 0;
       const points = (cur?.points ?? 0) + 1;
       const unlockedCount = Math.min(
@@ -76,12 +81,27 @@ export async function POST(req: Request) {
       );
       await admin
         .from("student_progress")
-        .update({ points, unlocked_count: unlockedCount, updated_at: new Date().toISOString() })
+        .update({
+          points,
+          unlocked_count: unlockedCount,
+          care,
+          updated_at: new Date().toISOString(),
+        })
         .eq("user_id", session.sub);
-      return NextResponse.json({ graduated: true, points, unlockedCount, prevUnlocked });
+      return NextResponse.json({
+        graduated: true,
+        points,
+        unlockedCount,
+        prevUnlocked,
+        care: computeCareView(care, today),
+      });
     }
 
-    return NextResponse.json({ graduated: false });
+    await admin
+      .from("student_progress")
+      .update({ care, updated_at: new Date().toISOString() })
+      .eq("user_id", session.sub);
+    return NextResponse.json({ graduated: false, care: computeCareView(care, today) });
   }
 
   if (body.action === "add" && body.card) {

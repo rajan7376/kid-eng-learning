@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CREATURES, type Creature } from "./creatures";
+import type { CareView } from "./careServer";
+
+export type { CareView };
 
 export interface MistakeCard {
   id: string;
@@ -28,6 +31,7 @@ export function useStudent() {
   const [unlockedCount, setUnlockedCount] = useState(0);
   const [zooPositions, setZooPositions] = useState<ZooPositions>({});
   const [mistakes, setMistakes] = useState<MistakeCard[]>([]);
+  const [care, setCare] = useState<CareView | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -39,6 +43,7 @@ export function useStudent() {
         setUnlockedCount(d.unlockedCount ?? 0);
         setZooPositions(d.zooPositions ?? {});
         setMistakes(d.mistakes ?? []);
+        setCare(d.care ?? null);
       })
       .finally(() => active && setLoading(false));
     return () => {
@@ -62,6 +67,7 @@ export function useStudent() {
       if (d.error) return { awarded: 0, capReached: false, newly: [] };
       setPoints(d.points);
       setUnlockedCount(d.unlockedCount);
+      if (d.care) setCare(d.care);
       return {
         awarded: d.awarded,
         capReached: d.capReached,
@@ -83,6 +89,7 @@ export function useStudent() {
         body: JSON.stringify({ action: "review", cardId, correct }),
       });
       const d = await res.json();
+      if (d.care) setCare(d.care);
       if (d.graduated) {
         setMistakes((prev) => prev.filter((m) => m.id !== cardId));
         setPoints(d.points);
@@ -129,6 +136,22 @@ export function useStudent() {
     });
   }, []);
 
+  const careAction = useCallback(
+    async (action: "feed" | "clean"): Promise<{ ok: boolean; error?: string }> => {
+      const res = await fetch("/api/student/care", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const d = await res.json();
+      if (d.care) setCare(d.care);
+      return { ok: !!d.ok, error: d.error };
+    },
+    [],
+  );
+  const feedPets = useCallback(() => careAction("feed"), [careAction]);
+  const cleanPets = useCallback(() => careAction("clean"), [careAction]);
+
   const removeMistake = useCallback((cardId: string) => {
     setMistakes((prev) => prev.filter((m) => m.id !== cardId));
     void fetch("/api/student/mistakes", {
@@ -144,9 +167,12 @@ export function useStudent() {
     unlockedCount,
     zooPositions,
     mistakes,
+    care,
     collection: CREATURES.slice(0, unlockedCount),
     completeQuiz,
     reviewMistake,
+    feedPets,
+    cleanPets,
     saveZoo,
     addMistake,
     removeMistake,

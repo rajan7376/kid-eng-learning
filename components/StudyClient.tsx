@@ -215,6 +215,9 @@ export default function StudyClient({ classes, weeks }: Props) {
             collection={student.collection}
             positions={student.zooPositions}
             onSave={student.saveZoo}
+            care={student.care}
+            onFeed={student.feedPets}
+            onClean={student.cleanPets}
           />
         </div>
       )}

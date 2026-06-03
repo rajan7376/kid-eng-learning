@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/authServer";
 import { EXPIRE_DAYS, GRADUATE_DAYS, ageDays, taipeiToday } from "@/lib/rules";
+import { computeCareView, normalizeCare } from "@/lib/careServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export async function GET() {
 
   const { data: progress } = await admin
     .from("student_progress")
-    .select("points, unlocked_count, zoo_positions")
+    .select("points, unlocked_count, zoo_positions, care")
     .eq("user_id", session.sub)
     .maybeSingle();
 
@@ -59,12 +60,23 @@ export async function GET() {
       .in("card_id", expired);
   }
 
+  // 動物照顧：首次擁有動物時初始化(設今天已餵/掃 + 起始道具)
+  const unlockedCount = progress?.unlocked_count ?? 0;
+  const { care, changed } = normalizeCare(progress?.care ?? {}, today, unlockedCount > 0);
+  if (changed) {
+    await admin
+      .from("student_progress")
+      .update({ care, updated_at: new Date().toISOString() })
+      .eq("user_id", session.sub);
+  }
+
   return NextResponse.json({
     role: session.role,
     username: session.username,
     points: progress?.points ?? 0,
-    unlockedCount: progress?.unlocked_count ?? 0,
+    unlockedCount,
     zooPositions: progress?.zoo_positions ?? {},
     mistakes,
+    care: computeCareView(care, today),
   });
 }
