@@ -49,6 +49,11 @@ export function normalizeCare(
     care.broom = care.broom ?? CARE_START_ITEMS;
     changed = true;
   }
+  // 相容舊資料：last_cleaned 曾存純日期(無時間)，重置為現在避免瞬間爆大便
+  if (care.last_cleaned && !care.last_cleaned.includes("T")) {
+    care.last_cleaned = new Date().toISOString();
+    changed = true;
+  }
   return { care, changed };
 }
 
