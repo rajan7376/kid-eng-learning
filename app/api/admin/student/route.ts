@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   if (!s || s.role !== "admin")
     return NextResponse.json({ error: "需要管理員權限" }, { status: 403 });
 
-  const { op, userId, points, unlockedCount, count } = (await req
+  const { op, userId, points, unlockedCount, count, feed, broom } = (await req
     .json()
     .catch(() => ({}))) as {
     op?: string;
@@ -19,6 +19,8 @@ export async function POST(req: Request) {
     points?: number;
     unlockedCount?: number;
     count?: number;
+    feed?: number;
+    broom?: number;
   };
   if (!userId) return NextResponse.json({ error: "缺少 userId" }, { status: 400 });
 
@@ -40,6 +42,25 @@ export async function POST(req: Request) {
       { onConflict: "user_id" },
     );
     return NextResponse.json({ ok: true, points: p, unlockedCount: u });
+  }
+
+  if (op === "setItems") {
+    await admin
+      .from("student_progress")
+      .upsert({ user_id: userId }, { onConflict: "user_id", ignoreDuplicates: true });
+    const { data: row } = await admin
+      .from("student_progress")
+      .select("care")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const care = { ...((row?.care as Record<string, unknown>) ?? {}) };
+    if (feed !== undefined) care.feed = Math.max(0, Math.floor(Number(feed) || 0));
+    if (broom !== undefined) care.broom = Math.max(0, Math.floor(Number(broom) || 0));
+    await admin
+      .from("student_progress")
+      .update({ care, updated_at: new Date().toISOString() })
+      .eq("user_id", userId);
+    return NextResponse.json({ ok: true, feed: care.feed, broom: care.broom });
   }
 
   if (op === "clearMistakes") {

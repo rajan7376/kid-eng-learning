@@ -23,7 +23,7 @@ export async function GET() {
 
   const { data: progress } = await admin
     .from("student_progress")
-    .select("user_id, points, unlocked_count");
+    .select("user_id, points, unlocked_count, care");
   const { data: mistakes } = await admin
     .from("student_mistakes")
     .select("user_id");
@@ -50,6 +50,8 @@ export async function GET() {
       ...u,
       points: pMap.get(u.id)?.points ?? 0,
       unlockedCount: pMap.get(u.id)?.unlocked_count ?? 0,
+      feed: (pMap.get(u.id)?.care as { feed?: number } | undefined)?.feed ?? 0,
+      broom: (pMap.get(u.id)?.care as { broom?: number } | undefined)?.broom ?? 0,
       mistakeCount: mCount.get(u.id) ?? 0,
       testCount: tCount.get(u.id) ?? 0,
       lastTest: tLast.get(u.id) ?? null,

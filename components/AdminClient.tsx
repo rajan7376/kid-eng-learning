@@ -17,6 +17,8 @@ interface AdminUser {
   display_name: string | null;
   points: number;
   unlockedCount: number;
+  feed: number;
+  broom: number;
   mistakeCount: number;
   testCount: number;
   lastTest: string | null;
@@ -390,6 +392,22 @@ function UsersPanel() {
     void load();
   }
 
+  async function editItems(u: AdminUser) {
+    const fStr = prompt(`設定「${u.username}」的飼料 🥕 數量：`, String(u.feed));
+    if (fStr === null) return;
+    const bStr = prompt(`設定「${u.username}」的掃把 🧹 數量：`, String(u.broom));
+    if (bStr === null) return;
+    const body: Record<string, unknown> = { op: "setItems", userId: u.id };
+    if (fStr.trim() !== "") body.feed = parseInt(fStr, 10);
+    if (bStr.trim() !== "") body.broom = parseInt(bStr, 10);
+    await fetch("/api/admin/student", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    void load();
+  }
+
   async function clearMistakes(u: AdminUser) {
     if (!confirm(`清空「${u.username}」的所有錯字記錄？`)) return;
     await fetch("/api/admin/student", {
@@ -457,6 +475,8 @@ function UsersPanel() {
                   <th>角色</th>
                   <th>點數</th>
                   <th>解鎖</th>
+                  <th>🥕</th>
+                  <th>🧹</th>
                   <th>錯字</th>
                   <th>測驗次數</th>
                   <th>操作</th>
@@ -478,6 +498,8 @@ function UsersPanel() {
                     </td>
                     <td>{u.role === "student" ? u.points : "—"}</td>
                     <td>{u.role === "student" ? u.unlockedCount : "—"}</td>
+                    <td>{u.role === "student" ? u.feed : "—"}</td>
+                    <td>{u.role === "student" ? u.broom : "—"}</td>
                     <td>{u.role === "student" ? u.mistakeCount : "—"}</td>
                     <td>{u.role === "student" ? u.testCount : "—"}</td>
                     <td className="space-x-2 whitespace-nowrap">
@@ -494,6 +516,12 @@ function UsersPanel() {
                             className="text-sky-500 hover:underline"
                           >
                             改次數
+                          </button>
+                          <button
+                            onClick={() => editItems(u)}
+                            className="text-orange-500 hover:underline"
+                          >
+                            改道具
                           </button>
                           <button
                             onClick={() => clearMistakes(u)}
