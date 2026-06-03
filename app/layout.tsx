@@ -5,8 +5,8 @@ import NavBar from "@/components/NavBar";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "兒童美語互動單字本",
-  description: "AI 自動生成單字卡，孩子練發音與聽力測驗",
+  title: "單字動物王國",
+  description: "AI 自動生成單字卡，孩子練發音與聽力測驗，答對收集動物打造動物王國",
 };
 
 export default async function RootLayout({

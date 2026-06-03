@@ -17,7 +17,7 @@ export default async function StudyPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-extrabold text-brand mb-4">單字學習</h1>
+      <h1 className="text-2xl font-extrabold text-brand mb-4">🦊 單字動物王國</h1>
       <StudyClient
         classes={(classes ?? []) as ClassRow[]}
         weeks={(weeks ?? []) as WeekRow[]}

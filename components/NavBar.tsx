@@ -86,7 +86,7 @@ export default function NavBar({ session }: { session: Session | null }) {
           href="/"
           className="text-lg sm:text-xl font-extrabold text-brand whitespace-nowrap"
         >
-          🦊 美語單字本
+          🦊 單字動物王國
         </Link>
 
         {/* 桌面：橫向 */}
