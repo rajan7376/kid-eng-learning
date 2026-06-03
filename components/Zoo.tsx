@@ -13,6 +13,20 @@ const MOOD: Record<CareView["hungerStage"], string> = {
   away: "🏃",
 };
 
+// 大便固定散落位置(草地區)
+const POOP_SPOTS = [
+  { x: 40, y: 250 },
+  { x: 180, y: 300 },
+  { x: 320, y: 260 },
+  { x: 470, y: 310 },
+  { x: 90, y: 350 },
+  { x: 250, y: 360 },
+  { x: 400, y: 350 },
+  { x: 150, y: 240 },
+  { x: 360, y: 300 },
+  { x: 520, y: 260 },
+];
+
 interface Pos {
   x: number;
   y: number;
@@ -148,11 +162,11 @@ export default function Zoo({
               ? "動物們離家出走了！今天餵食＋打掃就會把牠們找回來～"
               : [
                   care.fedToday ? "今天餵過了" : `已 ${care.daysSinceFed} 天沒餵食`,
-                  care.cleanedToday ? "今天打掃過了" : `已 ${care.daysSinceCleaned} 天沒打掃`,
+                  care.poopCount > 0 ? `地上有 ${care.poopCount} 坨大便` : "很乾淨",
                 ].join("・")}
           </p>
           <p className="text-[11px] text-slate-300">
-            飼料來自每天完成測驗、掃把來自每天複習錯字大魔王；連續 3 天沒照顧會生病，7 天會離家。
+            飼料來自每天完成測驗、掃把來自每天複習錯字大魔王。每 12 小時長 1 坨大便；太久沒餵或沒打掃，動物會生病甚至離家出走。
           </p>
           {msg && <p className="text-xs text-brand font-bold">{msg}</p>}
         </div>
@@ -190,20 +204,18 @@ export default function Zoo({
           </div>
         )}
 
-        {/* 髒污：未打掃時出現便便 */}
-        {!readOnly &&
-          care &&
-          !away &&
-          care.messStage !== "ok" &&
-          collection.length > 0 && (
-            <div className="pointer-events-none absolute inset-0 text-2xl">
-              <span className="absolute bottom-10 left-10">💩</span>
-              <span className="absolute bottom-24 right-16">💩</span>
-              {care.messStage === "sick" && (
-                <span className="absolute bottom-16 left-1/2">💩</span>
-              )}
-            </div>
-          )}
+        {/* 髒污：依大便數實際畫出便便(最多 10 坨) */}
+        {!readOnly && care && !away && care.poopCount > 0 && collection.length > 0 && (
+          <div className="pointer-events-none absolute inset-0 text-2xl">
+            {POOP_SPOTS.slice(0, Math.min(care.poopCount, POOP_SPOTS.length)).map(
+              (s, i) => (
+                <span key={i} className="absolute" style={{ left: s.x, top: s.y }}>
+                  💩
+                </span>
+              ),
+            )}
+          </div>
+        )}
 
         {/* 離家出走 */}
         {away && (

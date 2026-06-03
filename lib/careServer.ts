@@ -1,9 +1,13 @@
 import {
-  CARE_AWAY,
-  CARE_HUNGRY,
   CARE_ITEM_CAP,
-  CARE_SICK,
   CARE_START_ITEMS,
+  FEED_AWAY,
+  FEED_SICK,
+  FEED_WARN,
+  POOP_AWAY,
+  POOP_HOURS,
+  POOP_SICK,
+  POOP_WARN,
   daysBetweenDates,
 } from "./rules";
 
@@ -22,7 +26,7 @@ export interface CareView {
   feed: number;
   broom: number;
   daysSinceFed: number;
-  daysSinceCleaned: number;
+  poopCount: number;
   hungerStage: CareStage;
   messStage: CareStage;
   away: boolean;
@@ -30,7 +34,7 @@ export interface CareView {
   cleanedToday: boolean;
 }
 
-// 確保 care 有合理初始值；首次擁有動物時給起始道具並把餵/掃日期設為今天
+// 確保 care 有合理初始值；首次擁有動物時給起始道具並把餵/掃時間設為現在
 export function normalizeCare(
   raw: unknown,
   today: string,
@@ -39,8 +43,8 @@ export function normalizeCare(
   const care: CareRow = { ...(raw as CareRow) };
   let changed = false;
   if (hasAnimals && !care.last_fed) {
-    care.last_fed = today;
-    care.last_cleaned = today;
+    care.last_fed = today; // 餵食以「天」計，存日期
+    care.last_cleaned = new Date().toISOString(); // 清潔以「12 小時」計，存時間戳
     care.feed = care.feed ?? CARE_START_ITEMS;
     care.broom = care.broom ?? CARE_START_ITEMS;
     changed = true;
@@ -48,26 +52,47 @@ export function normalizeCare(
   return { care, changed };
 }
 
-function stage(days: number): CareStage {
-  if (days >= CARE_AWAY) return "away";
-  if (days >= CARE_SICK) return "sick";
-  if (days >= CARE_HUNGRY) return "warn";
+function feedStage(days: number): CareStage {
+  if (days >= FEED_AWAY) return "away";
+  if (days >= FEED_SICK) return "sick";
+  if (days >= FEED_WARN) return "warn";
   return "ok";
+}
+
+function poopStage(poops: number): CareStage {
+  if (poops >= POOP_AWAY) return "away";
+  if (poops >= POOP_SICK) return "sick";
+  if (poops >= POOP_WARN) return "warn";
+  return "ok";
+}
+
+function tpeDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" });
 }
 
 export function computeCareView(care: CareRow, today: string): CareView {
   const dsf = care.last_fed ? daysBetweenDates(care.last_fed, today) : 0;
-  const dsc = care.last_cleaned ? daysBetweenDates(care.last_cleaned, today) : 0;
+  const poopCount = care.last_cleaned
+    ? Math.max(
+        0,
+        Math.floor(
+          (Date.now() - new Date(care.last_cleaned).getTime()) /
+            (POOP_HOURS * 3_600_000),
+        ),
+      )
+    : 0;
+  const hungerStage = feedStage(dsf);
+  const messStage = poopStage(poopCount);
   return {
     feed: care.feed ?? 0,
     broom: care.broom ?? 0,
     daysSinceFed: dsf,
-    daysSinceCleaned: dsc,
-    hungerStage: stage(dsf),
-    messStage: stage(dsc),
-    away: Math.max(dsf, dsc) >= CARE_AWAY,
+    poopCount,
+    hungerStage,
+    messStage,
+    away: hungerStage === "away" || messStage === "away",
     fedToday: dsf === 0 && !!care.last_fed,
-    cleanedToday: dsc === 0 && !!care.last_cleaned,
+    cleanedToday: !!care.last_cleaned && tpeDate(care.last_cleaned) === today,
   };
 }
 
@@ -94,9 +119,9 @@ export function doFeed(care: CareRow, today: string): boolean {
   return true;
 }
 
-export function doClean(care: CareRow, today: string): boolean {
+export function doClean(care: CareRow, _today: string): boolean {
   if ((care.broom ?? 0) < 1) return false;
   care.broom = (care.broom ?? 0) - 1;
-  care.last_cleaned = today;
+  care.last_cleaned = new Date().toISOString(); // 清光所有大便
   return true;
 }
