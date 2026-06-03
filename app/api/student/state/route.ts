@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/authServer";
+import { EXPIRE_DAYS, GRADUATE_DAYS, ageDays, taipeiToday } from "@/lib/rules";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,10 +21,43 @@ export async function GET() {
     .eq("user_id", session.sub)
     .maybeSingle();
 
-  const { data: mistakes } = await admin
+  const { data: mistakesRaw } = await admin
     .from("student_mistakes")
-    .select("card_id, english_word, word_meaning_zh, sentence, sentence_zh")
+    .select("card_id, english_word, word_meaning_zh, sentence, sentence_zh, created_at, last_reviewed")
     .eq("user_id", session.sub);
+
+  const today = taipeiToday();
+  const expired: string[] = [];
+  const mistakes = (mistakesRaw ?? [])
+    .filter((m) => {
+      const age = ageDays(m.created_at);
+      if (age > EXPIRE_DAYS) {
+        expired.push(m.card_id);
+        return false; // 超過緩衝仍未畢業 → 過期移除
+      }
+      return true;
+    })
+    .map((m) => {
+      const age = ageDays(m.created_at);
+      return {
+        id: m.card_id,
+        english_word: m.english_word,
+        word_meaning_zh: m.word_meaning_zh,
+        sentence: m.sentence,
+        sentence_zh: m.sentence_zh,
+        reviewedToday: m.last_reviewed === today,
+        due: age >= GRADUATE_DAYS,
+        daysLeft: Math.max(0, GRADUATE_DAYS - age),
+      };
+    });
+
+  if (expired.length > 0) {
+    await admin
+      .from("student_mistakes")
+      .delete()
+      .eq("user_id", session.sub)
+      .in("card_id", expired);
+  }
 
   return NextResponse.json({
     role: session.role,
@@ -31,12 +65,6 @@ export async function GET() {
     points: progress?.points ?? 0,
     unlockedCount: progress?.unlocked_count ?? 0,
     zooPositions: progress?.zoo_positions ?? {},
-    mistakes: (mistakes ?? []).map((m) => ({
-      id: m.card_id,
-      english_word: m.english_word,
-      word_meaning_zh: m.word_meaning_zh,
-      sentence: m.sentence,
-      sentence_zh: m.sentence_zh,
-    })),
+    mistakes,
   });
 }

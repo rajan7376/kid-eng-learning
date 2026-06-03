@@ -33,16 +33,33 @@ export default function StudyClient({ classes, weeks }: Props) {
 
   const student = useStudent();
   const progress = student.points % POINTS_PER_CREATURE;
-  const [celebration, setCelebration] = useState<{ newly: Creature[] } | null>(null);
+  const [celebration, setCelebration] = useState<{
+    title: string;
+    subtitle?: string;
+    newly: Creature[];
+  } | null>(null);
+  const [testActive, setTestActive] = useState(false);
 
-  async function grantPoint() {
-    const newly = await student.addPoints(1);
-    setCelebration({ newly });
+  function switchMode(target: typeof mode) {
+    if (target === mode) return;
+    if (testActive && mode === "test") {
+      if (!confirm("測驗進行中，離開會放棄這次測驗喔！確定離開？")) return;
+      setTestActive(false);
+    }
+    setMode(target);
   }
 
-  function handleTestComplete(score: number, total: number) {
-    student.recordTest(weekId || null, score, total, "quiz");
-    if (total > 0 && score === total) void grantPoint();
+  async function handleTestComplete(score: number, total: number) {
+    const r = await student.completeQuiz(weekId || null, score, total);
+    if (r.awarded > 0) {
+      setCelebration({ title: "🎉 滿分！+1 點", newly: r.newly });
+    } else if (r.capReached) {
+      setCelebration({
+        title: "🎉 滿分！",
+        subtitle: "這個單字表的獎勵點數已經拿滿囉（上限 2 點）",
+        newly: [],
+      });
+    }
   }
 
   useEffect(() => {
@@ -131,11 +148,11 @@ export default function StudyClient({ classes, weeks }: Props) {
           ).map((t) => (
             <button
               key={t.k}
-              onClick={() => setMode(t.k)}
+              onClick={() => switchMode(t.k)}
               disabled={t.disabled}
               className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-40 ${
                 mode === t.k ? "bg-brand text-white" : "text-brand"
-              }`}
+              } ${testActive && mode === "test" && t.k !== "test" ? "opacity-50" : ""}`}
             >
               {t.label}
             </button>
@@ -159,14 +176,17 @@ export default function StudyClient({ classes, weeks }: Props) {
           cards={cards}
           onComplete={handleTestComplete}
           onWrong={(card) => student.addMistake(card)}
+          onActiveChange={setTestActive}
         />
       )}
 
       {mode === "boss" && (
         <BossBattle
           mistakes={student.mistakes}
-          onRemove={student.removeMistake}
-          onDefeat={grantPoint}
+          onReview={student.reviewMistake}
+          onGraduate={(newly) =>
+            setCelebration({ title: "🎓 錯字畢業！+1 點", newly })
+          }
         />
       )}
 
@@ -202,7 +222,10 @@ export default function StudyClient({ classes, weeks }: Props) {
       {celebration && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full card-shadow space-y-4">
-            <p className="text-2xl font-extrabold text-brand">🎉 滿分！+1 點</p>
+            <p className="text-2xl font-extrabold text-brand">{celebration.title}</p>
+            {celebration.subtitle && (
+              <p className="text-slate-600">{celebration.subtitle}</p>
+            )}
             {celebration.newly.length > 0 ? (
               <>
                 <p className="text-slate-600">解鎖新朋友！</p>
@@ -218,9 +241,11 @@ export default function StudyClient({ classes, weeks }: Props) {
                 </p>
               </>
             ) : (
-              <p className="text-slate-600">
-                再 {POINTS_PER_CREATURE - progress} 點就能解鎖下一隻可愛生物！
-              </p>
+              !celebration.subtitle && (
+                <p className="text-slate-600">
+                  再 {POINTS_PER_CREATURE - progress} 點就能解鎖下一隻可愛生物！
+                </p>
+              )
             )}
             <button
               onClick={() => setCelebration(null)}

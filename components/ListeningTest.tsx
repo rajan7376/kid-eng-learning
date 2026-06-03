@@ -17,8 +17,51 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// 比對用：去標點/省略號、大小寫無視、空白收斂
+function normAnswer(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[.．。…,，!！?？'’"“”、:：;；()\[\]/\\\-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// 一個單字可接受的多種寫法(單複數、斜線、括號內替代形式)
+function answerVariants(word: string): string[] {
+  const set = new Set<string>();
+  set.add(word);
+  const noParen = word.replace(/[(（][^)）]*[)）]/g, " ").trim();
+  if (noParen) set.add(noParen);
+  for (const m of word.matchAll(/[(（]([^)）]*)[)）]/g)) {
+    m[1].split(/[/、,，]/).forEach((x) => x.trim() && set.add(x.trim()));
+  }
+  [word, noParen].forEach((s) =>
+    s.split("/").forEach((x) => {
+      const t = x.replace(/[(（][^)）]*[)）]/g, "").trim();
+      if (t) set.add(t);
+    }),
+  );
+  return [...set].map(normAnswer).filter(Boolean);
+}
+
+function fillMatches(input: string, word: string): boolean {
+  return answerVariants(word).includes(normAnswer(input));
+}
+
+const POS = "n|v|vt|vi|adj|adv|prep|pron|conj|interj|art|aux|phr|num";
+// 剝掉單字裡的詞性標記，如「abandon (v.)」「run v.」→「abandon」「run」
+function stripPos(word: string): string {
+  return word
+    .replace(new RegExp(`[\\(（]\\s*(?:${POS})\\.?\\s*[\\)）]`, "gi"), "")
+    .replace(new RegExp(`\\b(?:${POS})\\.`, "gi"), "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 interface Question {
   card: WordCardRow;
+  word: string; // 已剝除詞性的測驗單字
+  isPhrase: boolean; // 片語(含空格)→ 只考選擇題
   options: string[];
   choiceAnswer: string;
   fromSentence: boolean;
@@ -36,42 +79,54 @@ function buildQuestions(cards: WordCardRow[]): Question[] {
     new Set(cards.map((c) => c.word_meaning_zh).filter(Boolean) as string[]),
   );
 
-  return shuffle(cards).map((card) => {
-    const word = card.english_word;
-    const fromSentence = Boolean(
-      card.sentence && new RegExp(escapeRegExp(word.trim()), "i").test(card.sentence),
-    );
-    const blanked = fromSentence
-      ? card.sentence!.replace(new RegExp(escapeRegExp(word.trim()), "ig"), "＿＿＿＿")
-      : "";
-    const correct = card.word_meaning_zh || card.english_word;
-    const distractors = shuffle(meanings.filter((m) => m !== correct)).slice(0, 3);
-    return {
-      card,
-      options: shuffle([correct, ...distractors]),
-      choiceAnswer: correct,
-      fromSentence,
-      blanked,
-      fillAnswer: word,
-    };
-  });
+  return shuffle(cards)
+    .map((card) => {
+      const word = stripPos(card.english_word);
+      if (!word) return null; // 剝完詞性後為空 → 排除
+      // 句子挖空用主要形式(去掉括號/斜線替代與省略號)
+      const primary =
+        word
+          .replace(/[(（][^)）]*[)）]/g, " ")
+          .split("/")[0]
+          .replace(/\.{2,}|…/g, " ")
+          .trim() || word;
+      const fromSentence = Boolean(
+        card.sentence && new RegExp(escapeRegExp(primary), "i").test(card.sentence),
+      );
+      const blanked = fromSentence
+        ? card.sentence!.replace(new RegExp(escapeRegExp(primary), "ig"), "＿＿＿＿")
+        : "";
+      const correct = card.word_meaning_zh || word;
+      const distractors = shuffle(meanings.filter((m) => m !== correct)).slice(0, 3);
+      return {
+        card,
+        word,
+        isPhrase: /\s/.test(primary),
+        options: shuffle([correct, ...distractors]),
+        choiceAnswer: correct,
+        fromSentence,
+        blanked,
+        fillAnswer: word,
+      } as Question;
+    })
+    .filter((q): q is Question => q !== null);
 }
 
 function isQuestionCorrect(q: Question, r: Response): boolean {
-  return (
-    r.choice === q.choiceAnswer &&
-    r.fill.trim().toLowerCase() === q.fillAnswer.trim().toLowerCase()
-  );
+  if (q.isPhrase) return r.choice === q.choiceAnswer;
+  return r.choice === q.choiceAnswer && fillMatches(r.fill, q.fillAnswer);
 }
 
 export default function ListeningTest({
   cards,
   onComplete,
   onWrong,
+  onActiveChange,
 }: {
   cards: WordCardRow[];
   onComplete?: (score: number, total: number) => void;
   onWrong?: (card: WordCardRow) => void;
+  onActiveChange?: (active: boolean) => void;
 }) {
   const [round, setRound] = useState(0);
   const questions = useMemo(() => buildQuestions(cards), [cards, round]);
@@ -88,9 +143,16 @@ export default function ListeningTest({
   // 進入每一題唸一次單字
   useEffect(() => {
     if (started && !done && current)
-      void speak(current.card.id, "word", "normal", current.card.english_word);
+      void speak(current.card.id, "word", "normal", current.word);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, started]);
+
+  // 通知父層測驗是否進行中(鎖定分頁切換)
+  useEffect(() => {
+    onActiveChange?.(started && !done);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [started, done]);
+  useEffect(() => () => onActiveChange?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 測驗進行中阻止意外重整/離開
   useEffect(() => {
@@ -161,9 +223,8 @@ export default function ListeningTest({
           {questions.map((q, i) => {
             const r = responses[i] ?? { choice: null, fill: "" };
             const choiceOk = r.choice === q.choiceAnswer;
-            const fillOk =
-              r.fill.trim().toLowerCase() === q.fillAnswer.trim().toLowerCase();
-            const ok = choiceOk && fillOk;
+            const fillOk = fillMatches(r.fill, q.fillAnswer);
+            const ok = choiceOk && (q.isPhrase || fillOk);
             return (
               <div
                 key={q.card.id}
@@ -173,7 +234,7 @@ export default function ListeningTest({
               >
                 <div className="flex items-center justify-between">
                   <span className="font-bold">
-                    {i + 1}. {q.card.english_word}
+                    {i + 1}. {q.word}
                   </span>
                   <span>{ok ? "✅" : "❌"}</span>
                 </div>
@@ -185,14 +246,16 @@ export default function ListeningTest({
                     </span>
                   )}
                 </p>
-                <p className="text-sm text-slate-600">
-                  拼字：{q.fillAnswer}
-                  {!fillOk && (
-                    <span className="text-rose-500">
-                      （你寫：{r.fill || "未填"}）
-                    </span>
-                  )}
-                </p>
+                {!q.isPhrase && (
+                  <p className="text-sm text-slate-600">
+                    拼字：{q.fillAnswer}
+                    {!fillOk && (
+                      <span className="text-rose-500">
+                        （你寫：{r.fill || "未填"}）
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
             );
           })}
@@ -210,16 +273,15 @@ export default function ListeningTest({
     );
   }
 
-  const canNext = picked !== null && input.trim() !== "";
+  const canNext =
+    picked !== null && (current.isPhrase || input.trim() !== "");
 
-  function next() {
-    const r: Response = { choice: picked, fill: input };
+  function commitAndGo(target: number, finish = false) {
     const newResponses = [...responses];
-    newResponses[idx] = r;
+    newResponses[idx] = { choice: picked, fill: input };
     setResponses(newResponses);
 
-    if (idx + 1 >= questions.length) {
-      // 結算：算分、回報錯題
+    if (finish) {
       const score = questions.reduce(
         (s, q, i) => s + (isQuestionCorrect(q, newResponses[i]) ? 1 : 0),
         0,
@@ -229,11 +291,21 @@ export default function ListeningTest({
       });
       setDone(true);
       onComplete?.(score, questions.length);
-    } else {
-      setIdx((i) => i + 1);
-      setPicked(null);
-      setInput("");
+      return;
     }
+
+    const r = newResponses[target] ?? { choice: null, fill: "" };
+    setIdx(target);
+    setPicked(r.choice);
+    setInput(r.fill);
+  }
+
+  function prev() {
+    if (idx > 0) commitAndGo(idx - 1);
+  }
+  function next() {
+    if (idx + 1 >= questions.length) commitAndGo(idx, true);
+    else commitAndGo(idx + 1);
   }
 
   return (
@@ -247,13 +319,13 @@ export default function ListeningTest({
 
       <div className="flex gap-2">
         <button
-          onClick={() => speak(current.card.id, "word", "normal", current.card.english_word)}
+          onClick={() => speak(current.card.id, "word", "normal", current.word)}
           className="rounded-full bg-violet-100 text-brand px-4 py-2 font-bold"
         >
           🔊 再聽一次
         </button>
         <button
-          onClick={() => speak(current.card.id, "word", "slow", current.card.english_word)}
+          onClick={() => speak(current.card.id, "word", "slow", current.word)}
           className="rounded-full bg-violet-100 text-brand px-4 py-2 font-bold"
         >
           🐢 慢速
@@ -280,7 +352,8 @@ export default function ListeningTest({
         </div>
       </div>
 
-      {/* 第二步：拼單字 */}
+      {/* 第二步：拼單字（片語略過，只考選擇題） */}
+      {!current.isPhrase && (
       <div className="border-t border-slate-100 pt-3">
         {current.fromSentence ? (
           <>
@@ -303,12 +376,25 @@ export default function ListeningTest({
             onChange={(e) => setInput(e.target.value)}
             autoFocus
             placeholder="在這裡輸入單字"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            name={`answer-${idx}-${round}`}
             className="w-full rounded-lg border-2 border-slate-200 px-3 py-2"
           />
         </form>
       </div>
+      )}
 
-      <div className="flex justify-end border-t border-slate-100 pt-3">
+      <div className="flex justify-between border-t border-slate-100 pt-3">
+        <button
+          onClick={prev}
+          disabled={idx === 0}
+          className="rounded-full bg-violet-100 text-brand px-6 py-2 font-bold disabled:opacity-40"
+        >
+          上一題
+        </button>
         <button
           onClick={next}
           disabled={!canNext}

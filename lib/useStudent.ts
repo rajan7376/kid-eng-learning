@@ -9,6 +9,15 @@ export interface MistakeCard {
   word_meaning_zh: string | null;
   sentence: string | null;
   sentence_zh: string | null;
+  reviewedToday?: boolean;
+  due?: boolean; // 已滿天數可畢業
+  daysLeft?: number;
+}
+
+export interface QuizResult {
+  awarded: number;
+  capReached: boolean;
+  newly: Creature[];
 }
 
 export type ZooPositions = Record<string, { x: number; y: number }>;
@@ -37,19 +46,57 @@ export function useStudent() {
     };
   }, []);
 
-  // 加分；回傳這次新解鎖的生物
-  const addPoints = useCallback(async (delta = 1): Promise<Creature[]> => {
-    const res = await fetch("/api/student/points", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ delta }),
-    });
-    const d = await res.json();
-    if (d.error) return [];
-    setPoints(d.points);
-    setUnlockedCount(d.unlockedCount);
-    return CREATURES.slice(d.prevUnlocked, d.unlockedCount);
-  }, []);
+  // 完成測驗：記成績 + 依週次上限加分；回傳獎勵狀態
+  const completeQuiz = useCallback(
+    async (
+      weekId: string | null,
+      score: number,
+      total: number,
+    ): Promise<QuizResult> => {
+      const res = await fetch("/api/student/quiz-complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weekId, score, total }),
+      });
+      const d = await res.json();
+      if (d.error) return { awarded: 0, capReached: false, newly: [] };
+      setPoints(d.points);
+      setUnlockedCount(d.unlockedCount);
+      return {
+        awarded: d.awarded,
+        capReached: d.capReached,
+        newly: CREATURES.slice(d.prevUnlocked, d.unlockedCount),
+      };
+    },
+    [],
+  );
+
+  // 每日複習一個錯字；滿天數答對 → 畢業 +1 點
+  const reviewMistake = useCallback(
+    async (
+      cardId: string,
+      correct: boolean,
+    ): Promise<{ graduated: boolean; newly: Creature[] }> => {
+      const res = await fetch("/api/student/mistakes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "review", cardId, correct }),
+      });
+      const d = await res.json();
+      if (d.graduated) {
+        setMistakes((prev) => prev.filter((m) => m.id !== cardId));
+        setPoints(d.points);
+        setUnlockedCount(d.unlockedCount);
+        return { graduated: true, newly: CREATURES.slice(d.prevUnlocked, d.unlockedCount) };
+      }
+      // 標記今天已複習
+      setMistakes((prev) =>
+        prev.map((m) => (m.id === cardId ? { ...m, reviewedToday: true } : m)),
+      );
+      return { graduated: false, newly: [] };
+    },
+    [],
+  );
 
   const saveZoo = useCallback((positions: ZooPositions) => {
     setZooPositions(positions);
@@ -62,12 +109,23 @@ export function useStudent() {
 
   const addMistake = useCallback((card: MistakeCard) => {
     setMistakes((prev) =>
-      prev.some((m) => m.id === card.id) ? prev : [...prev, card],
+      prev.some((m) => m.id === card.id)
+        ? prev
+        : [...prev, { ...card, reviewedToday: false, due: false, daysLeft: 30 }],
     );
     void fetch("/api/student/mistakes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "add", card }),
+      body: JSON.stringify({
+        action: "add",
+        card: {
+          id: card.id,
+          english_word: card.english_word,
+          word_meaning_zh: card.word_meaning_zh,
+          sentence: card.sentence,
+          sentence_zh: card.sentence_zh,
+        },
+      }),
     });
   }, []);
 
@@ -80,17 +138,6 @@ export function useStudent() {
     });
   }, []);
 
-  const recordTest = useCallback(
-    (weekId: string | null, score: number, total: number, kind: "quiz" | "boss") => {
-      void fetch("/api/student/test-result", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weekId, score, total, kind }),
-      });
-    },
-    [],
-  );
-
   return {
     loading,
     points,
@@ -98,10 +145,10 @@ export function useStudent() {
     zooPositions,
     mistakes,
     collection: CREATURES.slice(0, unlockedCount),
-    addPoints,
+    completeQuiz,
+    reviewMistake,
     saveZoo,
     addMistake,
     removeMistake,
-    recordTest,
   };
 }

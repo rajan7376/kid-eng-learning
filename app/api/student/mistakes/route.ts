@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/authServer";
+import { CREATURE_COUNT, POINTS_PER_CREATURE } from "@/lib/creatures";
+import { GRADUATE_DAYS, ageDays, taipeiToday } from "@/lib/rules";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +12,7 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
   const body = (await req.json().catch(() => ({}))) as {
-    action?: "add" | "remove";
+    action?: "add" | "remove" | "review";
     card?: {
       id: string;
       english_word: string;
@@ -19,9 +21,68 @@ export async function POST(req: Request) {
       sentence_zh: string | null;
     };
     cardId?: string;
+    correct?: boolean;
   };
 
   const admin = createAdminClient();
+
+  // 每日複習：每字每天一次；滿 GRADUATE_DAYS 天答對 → 畢業 +1 點
+  if (body.action === "review" && body.cardId) {
+    const { data: m } = await admin
+      .from("student_mistakes")
+      .select("created_at, last_reviewed")
+      .eq("user_id", session.sub)
+      .eq("card_id", body.cardId)
+      .maybeSingle();
+    if (!m) return NextResponse.json({ error: "找不到此錯字" }, { status: 404 });
+
+    const today = taipeiToday();
+    if (m.last_reviewed === today)
+      return NextResponse.json({ error: "今天已複習過", reviewedToday: true }, { status: 409 });
+
+    await admin
+      .from("student_mistakes")
+      .update({ last_reviewed: today })
+      .eq("user_id", session.sub)
+      .eq("card_id", body.cardId);
+
+    const due = ageDays(m.created_at) >= GRADUATE_DAYS;
+    if (body.correct && due) {
+      // 畢業：移除錯字 + 記一次打敗大魔王 + 加 1 點
+      await admin
+        .from("student_mistakes")
+        .delete()
+        .eq("user_id", session.sub)
+        .eq("card_id", body.cardId);
+      await admin.from("test_results").insert({
+        user_id: session.sub,
+        kind: "boss",
+        score: 1,
+        total: 1,
+      });
+      await admin
+        .from("student_progress")
+        .upsert({ user_id: session.sub }, { onConflict: "user_id", ignoreDuplicates: true });
+      const { data: cur } = await admin
+        .from("student_progress")
+        .select("points, unlocked_count")
+        .eq("user_id", session.sub)
+        .maybeSingle();
+      const prevUnlocked = cur?.unlocked_count ?? 0;
+      const points = (cur?.points ?? 0) + 1;
+      const unlockedCount = Math.min(
+        Math.floor(points / POINTS_PER_CREATURE),
+        CREATURE_COUNT,
+      );
+      await admin
+        .from("student_progress")
+        .update({ points, unlocked_count: unlockedCount, updated_at: new Date().toISOString() })
+        .eq("user_id", session.sub);
+      return NextResponse.json({ graduated: true, points, unlockedCount, prevUnlocked });
+    }
+
+    return NextResponse.json({ graduated: false });
+  }
 
   if (body.action === "add" && body.card) {
     await admin.from("student_mistakes").upsert(
