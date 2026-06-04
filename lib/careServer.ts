@@ -27,6 +27,7 @@ export interface CareView {
   broom: number;
   daysSinceFed: number;
   poopCount: number;
+  lastCleaned: string | null;
   hungerStage: CareStage;
   messStage: CareStage;
   away: boolean;
@@ -93,6 +94,7 @@ export function computeCareView(care: CareRow, today: string): CareView {
     broom: care.broom ?? 0,
     daysSinceFed: dsf,
     poopCount,
+    lastCleaned: care.last_cleaned ?? null,
     hungerStage,
     messStage,
     away: hungerStage === "away" || messStage === "away",

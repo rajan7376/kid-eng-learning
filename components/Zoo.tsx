@@ -3,6 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { Creature } from "@/lib/creatures";
 import type { CareView, ZooPositions } from "@/lib/useStudent";
+import { POOP_AWAY, POOP_HOURS, POOP_SICK, POOP_WARN } from "@/lib/rules";
+
+function poopStage(p: number): CareView["messStage"] {
+  if (p >= POOP_AWAY) return "away";
+  if (p >= POOP_SICK) return "sick";
+  if (p >= POOP_WARN) return "warn";
+  return "ok";
+}
 
 const TOKEN = 48;
 
@@ -56,11 +64,29 @@ export default function Zoo({
   const drag = useRef<{ i: number; dx: number; dy: number } | null>(null);
   const [msg, setMsg] = useState("");
 
+  // 大便數即時推算(每 5 秒重算，不必刷新頁面)
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTs(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, []);
+  const livePoop =
+    care && care.lastCleaned
+      ? Math.max(
+          0,
+          Math.floor(
+            (nowTs - new Date(care.lastCleaned).getTime()) /
+              (POOP_HOURS * 3_600_000),
+          ),
+        )
+      : care?.poopCount ?? 0;
+  const liveMess = poopStage(livePoop);
+
   const severity = ["away", "sick", "warn", "ok"] as const;
   const worst: CareView["hungerStage"] = care
-    ? severity.find((s) => care.hungerStage === s || care.messStage === s) ?? "ok"
+    ? severity.find((s) => care.hungerStage === s || liveMess === s) ?? "ok"
     : "ok";
-  const away = !!care?.away;
+  const away = !!care && (care.hungerStage === "away" || liveMess === "away");
   const showCare = !!care && !readOnly && collection.length > 0;
 
   async function act(fn?: () => Promise<{ ok: boolean; error?: string }>, okMsg = "") {
@@ -151,7 +177,7 @@ export default function Zoo({
             </button>
             <button
               onClick={() => act(onClean, "打掃完成，動物園好乾淨！✨")}
-              disabled={care.cleanedToday || care.broom < 1}
+              disabled={livePoop < 1 || care.broom < 1}
               className="flex-1 rounded-full bg-sky-100 text-sky-700 px-3 py-2 font-bold disabled:opacity-40"
             >
               🧹 打掃（{care.broom}）
@@ -162,7 +188,7 @@ export default function Zoo({
               ? "動物們離家出走了！今天餵食＋打掃就會把牠們找回來～"
               : [
                   care.fedToday ? "今天餵過了" : `已 ${care.daysSinceFed} 天沒餵食`,
-                  care.poopCount > 0 ? `地上有 ${care.poopCount} 坨大便` : "很乾淨",
+                  livePoop > 0 ? `地上有 ${livePoop} 坨大便` : "很乾淨",
                 ].join("・")}
           </p>
           <p className="text-[11px] text-slate-300">
@@ -205,9 +231,9 @@ export default function Zoo({
         )}
 
         {/* 髒污：依大便數實際畫出便便(最多 10 坨) */}
-        {!readOnly && care && !away && care.poopCount > 0 && collection.length > 0 && (
+        {!readOnly && care && !away && livePoop > 0 && collection.length > 0 && (
           <div className="pointer-events-none absolute inset-0 text-2xl">
-            {POOP_SPOTS.slice(0, Math.min(care.poopCount, POOP_SPOTS.length)).map(
+            {POOP_SPOTS.slice(0, Math.min(livePoop, POOP_SPOTS.length)).map(
               (s, i) => (
                 <span key={i} className="absolute" style={{ left: s.x, top: s.y }}>
                   💩
