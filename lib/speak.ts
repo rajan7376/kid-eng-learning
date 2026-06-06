@@ -81,6 +81,23 @@ export async function speakText(
   await browserSpeak(text, speed, lang);
 }
 
+/** 背景預先生成並快取音檔(不播放)，讓之後點發音可以秒播。 */
+export async function prefetchAudio(
+  cardId: string,
+  target: AudioTarget,
+  speed: Speed,
+): Promise<void> {
+  try {
+    await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardId, target, speed }),
+    });
+  } catch {
+    /* 預抓失敗忽略，點擊時再處理 */
+  }
+}
+
 /**
  * 播放英文發音：優先用後端 Azure 快取音檔，失敗則降級為瀏覽器內建語音。
  * 在 Edge 上瀏覽器語音會自動使用微軟 Neural 真人語音。
@@ -92,16 +109,19 @@ export async function speak(
   fallbackText: string,
 ): Promise<void> {
   try {
+    // 只查快取，立刻回應
     const res = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardId, target, speed }),
+      body: JSON.stringify({ cardId, target, speed, cacheOnly: true }),
     });
     const data = await res.json().catch(() => ({}) as Record<string, string>);
     if (res.ok && data.url) {
-      await playUrl(data.url);
+      await playUrl(data.url); // 命中快取：真人語音
       return;
     }
+    // 未命中：先用瀏覽器語音秒發聲，背景生成真人快取，下次就秒播真人
+    void prefetchAudio(cardId, target, speed);
     await browserSpeak(data.text ?? fallbackText, speed, "en-US");
   } catch {
     await browserSpeak(fallbackText, speed, "en-US");

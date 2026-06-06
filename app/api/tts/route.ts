@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { synthesizeSpeech, isAzureConfigured } from "@/lib/azureTts";
-import { synthesizeEdge } from "@/lib/edgeTts";
+import { ensureAudio } from "@/lib/ttsCache";
 import type { AudioTarget, Speed, WordCardRow } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -16,10 +15,11 @@ const COL: Record<string, string> = {
 };
 
 export async function POST(req: Request) {
-  const { cardId, target, speed } = (await req.json()) as {
+  const { cardId, target, speed, cacheOnly } = (await req.json()) as {
     cardId: string;
     target: AudioTarget;
     speed: Speed;
+    cacheOnly?: boolean;
   };
 
   if (!cardId || !COL[`${target}:${speed}`]) {
@@ -43,49 +43,13 @@ export async function POST(req: Request) {
   const text = target === "word" ? card.english_word : card.sentence;
   if (!text) return NextResponse.json({ error: "無內容可發音" }, { status: 400 });
 
-  // 依序嘗試：Azure(若有金鑰) -> Edge 免費真人語音 -> 瀏覽器語音
-  let mp3: Buffer | null = null;
-  let lastErr = "";
-  if (isAzureConfigured()) {
-    try {
-      mp3 = await synthesizeSpeech(text, speed);
-    } catch (err) {
-      lastErr = err instanceof Error ? err.message : "Azure TTS 失敗";
-    }
-  }
-  if (!mp3) {
-    try {
-      mp3 = await synthesizeEdge(text, speed);
-    } catch (err) {
-      lastErr = err instanceof Error ? err.message : "Edge TTS 失敗";
-    }
-  }
+  // 只查快取(不生成)：給前端「秒回」用，未命中就讓它先用瀏覽器語音
+  if (cacheOnly) return NextResponse.json({ miss: true, text });
 
-  if (!mp3) {
-    // 全部失敗 -> 讓前端降級為瀏覽器語音
-    return NextResponse.json({ fallback: true, text, error: lastErr }, { status: 503 });
-  }
+  // Azure(若有金鑰) -> Edge 免費真人語音 -> 上傳快取
+  const url = await ensureAudio(admin, card, target, speed);
+  if (url) return NextResponse.json({ url });
 
-  try {
-    const path = `${cardId}/${target}-${speed}.mp3`;
-    const { error: upErr } = await admin.storage
-      .from("audio")
-      .upload(path, mp3, { contentType: "audio/mpeg", upsert: true });
-    if (upErr) throw upErr;
-    const { data: pub } = admin.storage.from("audio").getPublicUrl(path);
-    await admin
-      .from("word_cards")
-      .update({ [column]: pub.publicUrl })
-      .eq("id", cardId);
-    return NextResponse.json({ url: pub.publicUrl });
-  } catch (err) {
-    return NextResponse.json(
-      {
-        fallback: true,
-        text,
-        error: err instanceof Error ? err.message : "音檔儲存失敗",
-      },
-      { status: 503 },
-    );
-  }
+  // 失敗 -> 讓前端降級為瀏覽器語音
+  return NextResponse.json({ fallback: true, text }, { status: 503 });
 }

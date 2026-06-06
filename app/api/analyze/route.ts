@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/authServer";
 import { extractHandout, inlinePart, textPart } from "@/lib/gemini";
+import { pregenerateWeekAudio } from "@/lib/ttsCache";
+import type { WordCardRow } from "@/lib/types";
 import type { Part } from "@google/generative-ai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function normalizeClassCode(raw: string): string {
   // 從 "Shiny (3A)" / "4A_" / "4A" 取出像 3A / 4B 的代碼
@@ -131,13 +133,26 @@ export async function POST(req: Request) {
       sentence: c.sentence ?? null,
       sentence_zh: c.sentence_zh ?? null,
     }));
-    if (rows.length) await admin.from("word_cards").insert(rows);
+    let inserted: WordCardRow[] = [];
+    if (rows.length) {
+      const ins = await admin.from("word_cards").insert(rows).select("*");
+      inserted = (ins.data ?? []) as WordCardRow[];
+    }
 
     if (uploadRow) {
       await admin
         .from("uploads")
         .update({ status: "done", week_id: wk!.id })
         .eq("id", uploadRow.id);
+    }
+
+    // 預先生成整週發音快取（最大努力，失敗的字之後點擊時再補生成）
+    if (inserted.length) {
+      try {
+        await pregenerateWeekAudio(admin, inserted);
+      } catch {
+        /* 忽略：點擊時會自動補生成 */
+      }
     }
 
     return NextResponse.json({
