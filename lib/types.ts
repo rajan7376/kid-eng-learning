@@ -31,7 +31,17 @@ export interface WordCardRow {
   audio_word_slow: string | null;
   audio_sentence_normal: string | null;
   audio_sentence_slow: string | null;
+  teach_tip: TeachTip | null;
   created_at: string;
+}
+
+export interface TeachTip {
+  emoji: string; // 代表性 emoji
+  syllables: string; // 音節拆解，如 cu-cum-ber
+  sound_alike: string; // 中文諧音/趣味發音
+  memory_trick: string; // 聯想記憶法
+  spelling_tip: string; // 拼字小技巧
+  mini_story: string; // 一句有趣小故事/畫面
 }
 
 export type UploadStatus = "pending" | "processing" | "done" | "error";

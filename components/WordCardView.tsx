@@ -1,13 +1,38 @@
 "use client";
 
 import { useState } from "react";
-import type { WordCardRow } from "@/lib/types";
+import type { TeachTip, WordCardRow } from "@/lib/types";
 import { speak, speakText } from "@/lib/speak";
 import { highlightWord } from "./highlight";
 
 export default function WordCardView({ card }: { card: WordCardRow }) {
   const [playing, setPlaying] = useState<string | null>(null);
   const [showZh, setShowZh] = useState(false);
+  const [showTeach, setShowTeach] = useState(false);
+  const [tip, setTip] = useState<TeachTip | null>(card.teach_tip ?? null);
+  const [teaching, setTeaching] = useState(false);
+  const [teachErr, setTeachErr] = useState("");
+
+  async function openTeach() {
+    setShowTeach(true);
+    if (tip || teaching) return;
+    setTeaching(true);
+    setTeachErr("");
+    try {
+      const res = await fetch("/api/teach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardId: card.id }),
+      });
+      const d = await res.json();
+      if (d.tip) setTip(d.tip);
+      else setTeachErr(d.error || "產生失敗，請稍後再試");
+    } catch {
+      setTeachErr("連線失敗，請稍後再試");
+    } finally {
+      setTeaching(false);
+    }
+  }
 
   async function play(target: "word" | "sentence", speed: "normal" | "slow") {
     const key = `${target}-${speed}`;
@@ -66,6 +91,12 @@ export default function WordCardView({ card }: { card: WordCardRow }) {
       <div className="flex gap-2 flex-wrap">
         <Btn label="🔊 發音" target="word" speed="normal" />
         <Btn label="🐢 慢速" target="word" speed="slow" />
+        <button
+          onClick={openTeach}
+          className="rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-sm font-bold hover:bg-amber-200"
+        >
+          💡 記憶教學
+        </button>
       </div>
 
       {card.sentence && (
@@ -99,6 +130,87 @@ export default function WordCardView({ card }: { card: WordCardRow }) {
           </div>
         </div>
       )}
+
+      {showTeach && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowTeach(false)}
+        >
+          <div
+            className="bg-white rounded-3xl p-6 max-w-md w-full card-shadow space-y-3 max-h-[85vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-xl font-extrabold text-amber-600">
+                💡 {card.english_word} 記憶教學
+              </p>
+              <button
+                onClick={() => setShowTeach(false)}
+                className="text-slate-400 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {teaching && (
+              <p className="text-slate-500 py-6 text-center">
+                🤖 AI 老師正在想記憶小技巧…
+              </p>
+            )}
+            {teachErr && <p className="text-rose-500">{teachErr}</p>}
+
+            {tip && (
+              <div className="space-y-3">
+                <div className="text-center text-5xl">{tip.emoji}</div>
+                <TipRow icon="🔤" title="音節拆解" text={tip.syllables} speakable />
+                <TipRow icon="🗣️" title="諧音念念看" text={tip.sound_alike} />
+                <TipRow icon="🧠" title="聯想記憶" text={tip.memory_trick} />
+                <TipRow icon="✏️" title="拼字技巧" text={tip.spelling_tip} />
+                <TipRow icon="📖" title="小故事" text={tip.mini_story} />
+                <div className="pt-1">
+                  <button
+                    onClick={() => speak(card.id, "word", "slow", card.english_word)}
+                    className="rounded-full bg-violet-100 text-brand px-4 py-2 text-sm font-bold"
+                  >
+                    🐢 慢慢念一次給我聽
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TipRow({
+  icon,
+  title,
+  text,
+  speakable = false,
+}: {
+  icon: string;
+  title: string;
+  text: string;
+  speakable?: boolean;
+}) {
+  return (
+    <div className="rounded-2xl bg-amber-50 px-4 py-3">
+      <p className="text-sm font-bold text-amber-700 flex items-center gap-2">
+        <span>{icon}</span>
+        {title}
+        {speakable && (
+          <button
+            onClick={() => speakText(text.replace(/-/g, " "), "en-US")}
+            title="念念看"
+            className="text-brand"
+          >
+            🔊
+          </button>
+        )}
+      </p>
+      <p className="text-slate-700 mt-0.5">{text}</p>
     </div>
   );
 }
