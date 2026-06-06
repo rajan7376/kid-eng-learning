@@ -71,6 +71,7 @@ const teachSchema = {
     memory_trick: { type: SchemaType.STRING },
     spelling_tip: { type: SchemaType.STRING },
     mini_story: { type: SchemaType.STRING },
+    image_prompt: { type: SchemaType.STRING },
   },
   required: [
     "emoji",
@@ -79,6 +80,7 @@ const teachSchema = {
     "memory_trick",
     "spelling_tip",
     "mini_story",
+    "image_prompt",
   ],
 } as const;
 
@@ -115,7 +117,8 @@ export async function teachWord(input: {
 - memory_trick: 一個聯想記憶法，把單字長相或發音跟中文意思連在一起，越有畫面越好。
 - spelling_tip: 一個拼字小技巧(例如字根、重複字母、和已學過的字比較、規律)，幫助記住怎麼拼。
 - mini_story: 用一句話講一個有趣、好笑或好記的小畫面/故事，把單字的意思演出來。
-不要太長，每項 1~2 句即可。只輸出 JSON。`;
+- image_prompt: 用「英文」描述一張能幫助記住這個單字的情境插圖，要簡單、可愛、色彩鮮明的兒童卡通風格、單一清楚主體、無文字。例如 cucumber -> "a cute smiling green cucumber cartoon character in a sunny vegetable garden, flat illustration, no text"。
+其餘各項用繁體中文，不要太長，每項 1~2 句即可。只輸出 JSON。`;
 
   const result = await model.generateContent(prompt);
   return JSON.parse(result.response.text()) as TeachTip;

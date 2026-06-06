@@ -5,6 +5,13 @@ import type { TeachTip, WordCardRow } from "@/lib/types";
 import { speak, speakText } from "@/lib/speak";
 import { highlightWord } from "./highlight";
 
+// 由單字產生穩定 seed，讓同一個字每次拿到同一張情境圖
+function seedOf(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
+  return h;
+}
+
 export default function WordCardView({ card }: { card: WordCardRow }) {
   const [playing, setPlaying] = useState<string | null>(null);
   const [showZh, setShowZh] = useState(false);
@@ -12,6 +19,7 @@ export default function WordCardView({ card }: { card: WordCardRow }) {
   const [tip, setTip] = useState<TeachTip | null>(card.teach_tip ?? null);
   const [teaching, setTeaching] = useState(false);
   const [teachErr, setTeachErr] = useState("");
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   async function openTeach() {
     setShowTeach(true);
@@ -95,7 +103,7 @@ export default function WordCardView({ card }: { card: WordCardRow }) {
           onClick={openTeach}
           className="rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-sm font-bold hover:bg-amber-200"
         >
-          💡 記憶教學
+          💡 學習小技巧
         </button>
       </div>
 
@@ -142,7 +150,7 @@ export default function WordCardView({ card }: { card: WordCardRow }) {
           >
             <div className="flex items-center justify-between">
               <p className="text-xl font-extrabold text-amber-600">
-                💡 {card.english_word} 記憶教學
+                💡 {card.english_word} 學習小技巧
               </p>
               <button
                 onClick={() => setShowTeach(false)}
@@ -161,7 +169,28 @@ export default function WordCardView({ card }: { card: WordCardRow }) {
 
             {tip && (
               <div className="space-y-3">
-                <div className="text-center text-5xl">{tip.emoji}</div>
+                {tip.image_prompt ? (
+                  <div className="relative rounded-2xl overflow-hidden bg-amber-50 aspect-[4/3]">
+                    {!imgLoaded && (
+                      <div className="absolute inset-0 flex items-center justify-center text-slate-400 text-sm">
+                        🎨 正在畫情境圖…
+                      </div>
+                    )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://image.pollinations.ai/prompt/${encodeURIComponent(
+                        tip.image_prompt,
+                      )}?width=512&height=384&nologo=true&seed=${seedOf(card.english_word)}`}
+                      alt={card.english_word}
+                      onLoad={() => setImgLoaded(true)}
+                      className={`w-full h-full object-cover transition-opacity ${
+                        imgLoaded ? "opacity-100" : "opacity-0"
+                      }`}
+                    />
+                  </div>
+                ) : (
+                  <div className="text-center text-5xl">{tip.emoji}</div>
+                )}
                 <TipRow icon="🔤" title="音節拆解" text={tip.syllables} speakable />
                 <TipRow icon="🗣️" title="諧音念念看" text={tip.sound_alike} />
                 <TipRow icon="🧠" title="聯想記憶" text={tip.memory_trick} />

@@ -20,7 +20,12 @@ function buildSsml(text: string, speed: Speed, voice: string): string {
 }
 
 export function isAzureConfigured(): boolean {
-  return Boolean(process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION);
+  const key = process.env.AZURE_SPEECH_KEY;
+  return Boolean(
+    key &&
+      key !== "YOUR-AZURE-SPEECH-KEY" &&
+      process.env.AZURE_SPEECH_REGION,
+  );
 }
 
 /** Synthesize speech and return mp3 bytes. Throws if not configured or request fails. */

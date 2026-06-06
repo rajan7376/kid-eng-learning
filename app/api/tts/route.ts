@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { synthesizeSpeech, isAzureConfigured } from "@/lib/azureTts";
+import { synthesizeEdge } from "@/lib/edgeTts";
 import type { AudioTarget, Speed, WordCardRow } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -42,20 +43,35 @@ export async function POST(req: Request) {
   const text = target === "word" ? card.english_word : card.sentence;
   if (!text) return NextResponse.json({ error: "無內容可發音" }, { status: 400 });
 
-  // Azure 未設定 -> 通知前端改用瀏覽器語音
-  if (!isAzureConfigured()) {
-    return NextResponse.json(
-      { fallback: true, text, error: "Azure 未設定" },
-      { status: 503 },
-    );
+  // 依序嘗試：Azure(若有金鑰) -> Edge 免費真人語音 -> 瀏覽器語音
+  let mp3: Buffer | null = null;
+  let lastErr = "";
+  if (isAzureConfigured()) {
+    try {
+      mp3 = await synthesizeSpeech(text, speed);
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : "Azure TTS 失敗";
+    }
+  }
+  if (!mp3) {
+    try {
+      mp3 = await synthesizeEdge(text, speed);
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : "Edge TTS 失敗";
+    }
+  }
+
+  if (!mp3) {
+    // 全部失敗 -> 讓前端降級為瀏覽器語音
+    return NextResponse.json({ fallback: true, text, error: lastErr }, { status: 503 });
   }
 
   try {
-    const mp3 = await synthesizeSpeech(text, speed);
     const path = `${cardId}/${target}-${speed}.mp3`;
-    await admin.storage
+    const { error: upErr } = await admin.storage
       .from("audio")
       .upload(path, mp3, { contentType: "audio/mpeg", upsert: true });
+    if (upErr) throw upErr;
     const { data: pub } = admin.storage.from("audio").getPublicUrl(path);
     await admin
       .from("word_cards")
@@ -63,12 +79,11 @@ export async function POST(req: Request) {
       .eq("id", cardId);
     return NextResponse.json({ url: pub.publicUrl });
   } catch (err) {
-    // 生成失敗也讓前端降級為瀏覽器語音
     return NextResponse.json(
       {
         fallback: true,
         text,
-        error: err instanceof Error ? err.message : "TTS 失敗",
+        error: err instanceof Error ? err.message : "音檔儲存失敗",
       },
       { status: 503 },
     );

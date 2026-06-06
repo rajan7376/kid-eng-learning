@@ -42,6 +42,7 @@ export interface TeachTip {
   memory_trick: string; // 聯想記憶法
   spelling_tip: string; // 拼字小技巧
   mini_story: string; // 一句有趣小故事/畫面
+  image_prompt?: string; // 情境圖的英文描述(給文生圖用)
 }
 
 export type UploadStatus = "pending" | "processing" | "done" | "error";
