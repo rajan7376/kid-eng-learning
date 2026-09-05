@@ -35,7 +35,7 @@ export function useStudent() {
           setZooPositions(d.zooPositions ?? {});
           setMistakes(d.mistakes ?? []);
           setCare(d.care ?? null);
-          if (d.care) { setDiamonds(d.care.diamonds || 0); setInventory(d.care.inventory || {}); }
+          if (d.care) { setDiamonds(d.currentDiamonds ?? d.diamonds ?? d.care.diamonds ?? 0); setInventory(d.care.inventory || {}); }
         }
         if (!h.error && h.history) { setHistory(h.history); }
         setLoading(false);
