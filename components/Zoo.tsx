@@ -188,9 +188,17 @@ export default function Zoo({
           {msg && <p className="text-xs text-brand font-bold">{msg}</p>}
         </div>
       )}
+
       <div ref={ref} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp} className="relative h-[420px] rounded-2xl overflow-hidden card-shadow select-none touch-none" style={{ background: "linear-gradient(to bottom,#bae6fd 0%,#bae6fd 52%,#86efac 52%,#4ade80 100%)" }}>
+        {/* 預設保留的背景裝飾元素 */}
         <div className="pointer-events-none absolute inset-0 text-3xl">
+          <span className="absolute right-4 top-3 text-4xl">☀️</span>
+          <span className="absolute left-3 top-24">🌳</span>
+          <span className="absolute right-10 top-28">🌴</span>
           <span className="absolute left-1/2 top-20 -translate-x-1/2 text-xl font-extrabold text-amber-800 bg-white/70 rounded-full px-3 py-1 whitespace-nowrap">{title}</span>
+          <span className="absolute bottom-2 left-6">🌷</span>
+          <span className="absolute bottom-3 right-8">🌻</span>
+          <span className="absolute bottom-1 left-1/3">🪨</span>
         </div>
 
         {collection.length === 0 && placedDecos.length === 0 && (

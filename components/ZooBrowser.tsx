@@ -9,6 +9,7 @@ interface ZooItem {
   userId: string;
   name: string;
   unlockedCount: number;
+  diamondCount: number;
   isMe: boolean;
 }
 interface Comment {
@@ -22,6 +23,7 @@ interface ViewData {
   name: string;
   unlockedCount: number;
   zooPositions: ZooPositions;
+  diamondCount: number;
   comments: Comment[];
 }
 
@@ -76,6 +78,9 @@ export default function ZooBrowser() {
 
         <div className="flex items-center justify-between bg-white rounded-2xl p-4 card-shadow">
           <span className="font-extrabold text-lg">{view.name} 的動物園</span>
+          <div className="bg-sky-100 text-brand px-4 py-1.5 rounded-full font-bold text-sm flex items-center gap-1">
+            💎 {view.diamondCount ?? 0}
+          </div>
         </div>
 
         <Zoo
@@ -139,7 +144,7 @@ export default function ZooBrowser() {
             {z.isMe && " (我)"}
           </p>
           <p className="text-xs text-slate-400">
-            🦁 {z.unlockedCount}
+            🦁 {z.unlockedCount}・💎 {z.diamondCount ?? 0}
           </p>
         </button>
       ))}
