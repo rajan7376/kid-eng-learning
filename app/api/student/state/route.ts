@@ -70,7 +70,7 @@ export async function GET() {
       .eq("user_id", session.sub);
   }
 
-  return NextResponse.json({
+  return NextResponse.json({`n    currentDiamonds: care.diamonds ?? 0,
     role: session.role,
     username: session.username,
     points: progress?.points ?? 0,
