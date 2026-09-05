@@ -1,6 +1,7 @@
-"use client";`nimport { useRouter } from "next/navigation";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { ClassRow, WeekRow, WordCardRow } from "@/lib/types";
 import { CREATURES, POINTS_PER_CREATURE, type Creature } from "@/lib/creatures";
@@ -15,7 +16,6 @@ import ZooBrowser from "./ZooBrowser";
 interface Props { classes: ClassRow[]; weeks: WeekRow[]; }
 
 export default function StudyClient({ classes, weeks }: Props) {
-  const router = useRouter();
   const router = useRouter();
   const supabase = createClient();
   const [classId, setClassId] = useState(classes[0]?.id ?? "");
@@ -43,7 +43,6 @@ export default function StudyClient({ classes, weeks }: Props) {
   }, [student.history]);
 
   function switchMode(target: typeof mode) {
-    if (target === 'zoo' || target === 'visit') router.refresh();
     if (target === "zoo" || target === "visit") {
       router.refresh();
     }
@@ -74,7 +73,7 @@ export default function StudyClient({ classes, weeks }: Props) {
       <div className="flex flex-col sm:flex-row gap-3 bg-white rounded-2xl p-4 card-shadow">
         <label className="flex-1 text-sm font-bold text-slate-600">班級
           <select value={classId} onChange={(e) => setClassId(e.target.value)} className="block mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
-              {classes.map((c) => ( <option key={c.id} value={c.id}>{c.code}{c.name ? " (" + c.name + ")" : ""}</option> ))}
+            {classes.map((c) => ( <option key={c.id} value={c.id}>{c.code}{c.name ? " (" + c.name + ")" : ""}</option> ))}
           </select>
         </label>
         <label className="flex-1 text-sm font-bold text-slate-600">週次單字表
@@ -82,7 +81,7 @@ export default function StudyClient({ classes, weeks }: Props) {
             {weekOptions.length === 0 && <option value="">（無）</option>}
             {weekOptions.map((w) => {
               const best = bestScores.get(w.id);
-                const scoreTag = best ? " [最高: " + best.score + "/" + best.total + "]" : "";
+              const scoreTag = best ? " [最高: " + best.score + "/" + best.total + "]" : "";
               return (
                 <option key={w.id} value={w.id}>
                   {w.week_label}{w.date_range ? " (" + w.date_range + ")" : ""}{scoreTag}
@@ -99,7 +98,7 @@ export default function StudyClient({ classes, weeks }: Props) {
               { k: "cards", label: "單字卡" },
               { k: "test", label: "聽力測驗", disabled: cards.length === 0 },
               { k: "history", label: "📋 測驗紀錄" },
-              { k: "boss", label: "錯字大魔王" + (student.mistakes.length > 0 ? " (" + student.mistakes.length + ")" : "") },
+              { k: "boss", label: "👹 錯字大魔王" + (student.mistakes.length > 0 ? " (" + student.mistakes.length + ")" : "") },
               { k: "zoo", label: "🦁 我的動物園" },
               { k: "visit", label: "🌍 逛動物園" },
               { k: "rank", label: "🏆 排行榜" },
