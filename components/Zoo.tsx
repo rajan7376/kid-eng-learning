@@ -155,7 +155,7 @@ export default function Zoo({
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {DECORATIONS.map(d => {
               const owned = inventory[d.id] || 0;
-              const affordable = diamonds >= d.price;
+              const affordable = currentDiamonds >= d.price;
               return (
                 <div key={d.id} className="flex flex-col items-center p-2 rounded-xl bg-violet-50 border border-violet-100">
                   <span className="text-4xl">{d.emoji}</span>
