@@ -74,7 +74,7 @@ export default function StudyClient({ classes, weeks }: Props) {
       <div className="flex flex-col sm:flex-row gap-3 bg-white rounded-2xl p-4 card-shadow">
         <label className="flex-1 text-sm font-bold text-slate-600">班級
           <select value={classId} onChange={(e) => setClassId(e.target.value)} className="block mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
-            {classes.map((c) => ( <option key={c.id} value={c.id}>{c.code}{c.name ? `（${c.name}）` : ""}</option> ))}
+            {classes.map((c) => ( <option key={c.id} value={c.id}>{c.code}{c.name ? `(${c.name})` : ""}</option> ))}
           </select>
         </label>
         <label className="flex-1 text-sm font-bold text-slate-600">週次單字表
