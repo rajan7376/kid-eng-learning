@@ -33,7 +33,7 @@ interface Pos { x: number; y: number; }
 
 export default function Zoo({
   collection, positions, onSave, readOnly = false, title = "🦁 我的動物園",
-  care, diamonds = 0, inventory = {}, onBuyDecoration, onFeed, onClean,
+  care, diamonds: propDiamonds = 0, inventory = {}, onBuyDecoration, onFeed, onClean,
 }: {
   collection: Creature[];
   positions: ZooPositions;
@@ -70,6 +70,7 @@ export default function Zoo({
     ? severity.find((s) => care.hungerStage === s || liveMess === s) ?? "ok"
     : "ok";
   const away = !!care && (care.hungerStage === "away" || liveMess === "away");
+  const currentDiamonds = care?.diamonds ?? propDiamonds;
   const showCare = !!care && !readOnly && collection.length > 0;
 
   async function act(fn?: () => Promise<{ ok: boolean; error?: string }>, okMsg = "") {
