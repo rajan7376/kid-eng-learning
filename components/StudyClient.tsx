@@ -99,7 +99,7 @@ export default function StudyClient({ classes, weeks }: Props) {
               { k: "cards", label: "單字卡" },
               { k: "test", label: "聽力測驗", disabled: cards.length === 0 },
               { k: "history", label: "📋 測驗紀錄" },
-              { k: "boss", label: `👹 錯字大魔王${student.mistakes.length > 0 ? ` (${student.mistakes.length})` : ""}` },
+              { k: "boss", label: "錯字大魔王" + (student.mistakes.length > 0 ? " (" + student.mistakes.length + ")" : "") },
               { k: "zoo", label: "🦁 我的動物園" },
               { k: "visit", label: "🌍 逛動物園" },
               { k: "rank", label: "🏆 排行榜" },
