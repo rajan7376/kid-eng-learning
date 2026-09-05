@@ -70,12 +70,16 @@ export async function GET() {
       .eq("user_id", session.sub);
   }
 
-  return NextResponse.json({`n    currentDiamonds: care.diamonds ?? 0,
+  return NextResponse.json({
+    currentDiamonds: care.diamonds ?? 0,
     role: session.role,
     username: session.username,
     points: progress?.points ?? 0,
     unlockedCount,
     zooPositions: progress?.zoo_positions ?? {},
+    mistakes,
+    care: computeCareView(care, today),
+  }),
     mistakes,
     care: computeCareView(care, today),
   });
