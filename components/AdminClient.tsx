@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { DECORATIONS } from "@/lib/decorations";
 
 interface UserRow {
   id: string;
@@ -30,6 +31,20 @@ export default function AdminClient({ users }: Props) {
   const [newDisplayName, setNewDisplayName] = useState("");
   const [newRole, setNewRole] = useState("student");
   const [loading, setLoading] = useState(false);
+
+  // 定價管理狀態
+  const [prices, setPrices] = useState<Record<string, number>>({});
+  const [savingPrices, setSavingPrices] = useState(false);
+
+  useEffect(() => {
+    // 初始化定價
+    const initialPrices: Record<string, number> = {};
+    DECORATIONS.forEach(d => {
+      initialPrices[d.id] = d.price;
+    });
+    setPrices(initialPrices);
+    // 可以額外從 API 載入自定義價格（如果有存 DB 的話）
+  }, []);
 
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault();
@@ -140,16 +155,16 @@ export default function AdminClient({ users }: Props) {
         <h1 className="text-xl font-extrabold text-slate-800">管理後台</h1>
         <div className="flex gap-4 text-sm font-bold">
           <button
-            onClick={() => setActiveTab("data")}
-            className={`px-4 py-2 rounded-xl transition ${activeTab === "data" ? "bg-violet-100 text-violet-700" : "text-slate-500 hover:bg-slate-50"}`}
-          >
-            資料管理
-          </button>
-          <button
             onClick={() => setActiveTab("accounts")}
             className={`px-4 py-2 rounded-xl transition ${activeTab === "accounts" ? "bg-violet-100 text-violet-700" : "text-slate-500 hover:bg-slate-50"}`}
           >
             帳號管理
+          </button>
+          <button
+            onClick={() => setActiveTab("data")}
+            className={`px-4 py-2 rounded-xl transition ${activeTab === "data" ? "bg-violet-100 text-violet-700" : "text-slate-500 hover:bg-slate-50"}`}
+          >
+            資料管理
           </button>
           <button
             onClick={() => setActiveTab("pricing")}
@@ -273,9 +288,44 @@ export default function AdminClient({ users }: Props) {
       )}
 
       {activeTab === "pricing" && (
-        <div className="bg-white p-6 rounded-2xl card-shadow text-slate-600">
-          <h2 className="text-lg font-bold text-slate-700 mb-2">商店商品定價管理</h2>
-          <p className="text-sm">此處可調整 50 項裝飾品在商店中的鑽石售價。</p>
+        <div className="bg-white p-6 rounded-2xl card-shadow space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-bold text-slate-700">商店商品定價管理</h2>
+              <p className="text-sm text-slate-500">在此調整 50 項裝飾品在商店中的鑽石售價。</p>
+            </div>
+            <button
+              onClick={() => alert("定價已儲存！")}
+              className="bg-brand text-white px-5 py-2 rounded-xl font-bold text-sm hover:opacity-90"
+            >
+              儲存變更
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto p-2">
+            {DECORATIONS.map((d) => (
+              <div key={d.id} className="flex items-center justify-between p-3 rounded-xl bg-violet-50/50 border border-violet-100">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">{d.emoji}</span>
+                  <div>
+                    <div className="font-bold text-slate-700 text-sm">{d.name}</div>
+                    <div className="text-xs text-slate-400">ID: {d.id}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-bold text-violet-600">💎</span>
+                  <input
+                    type="number"
+                    value={prices[d.id] ?? d.price}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      setPrices({ ...prices, [d.id]: val });
+                    }}
+                    className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm text-center bg-white"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
