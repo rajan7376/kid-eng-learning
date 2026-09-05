@@ -95,6 +95,8 @@ function DataPanel({
   const [log, setLog] = useState<string[]>([]);
   const [openWeek, setOpenWeek] = useState<string | null>(null);
   const [cards, setCards] = useState<WordCardRow[]>([]);
+  const [editingClassId, setEditingClassId] = useState<string | null>(null);
+  const [classEditForm, setClassEditForm] = useState({ code: "", name: "" });
 
   async function upload(e: React.FormEvent) {
     e.preventDefault();
@@ -140,6 +142,24 @@ function DataPanel({
     setCards((data ?? []) as WordCardRow[]);
   }
 
+  function startEditClass(c: ClassRow) {
+    setEditingClassId(c.id);
+    setClassEditForm({ code: c.code, name: c.name ?? "" });
+  }
+
+  async function saveClass(id: string) {
+    if (!classEditForm.code.trim()) {
+      alert("班級代碼不能為空");
+      return;
+    }
+    await dataOp("updateClass", id, {
+      code: classEditForm.code.trim(),
+      name: classEditForm.name.trim() || null,
+    });
+    setEditingClassId(null);
+    router.refresh();
+  }
+
   return (
     <div className="space-y-6">
       <form onSubmit={upload} className="bg-white rounded-2xl p-6 card-shadow space-y-3">
@@ -180,8 +200,53 @@ function DataPanel({
         )}
         {classes.map((c) => (
           <div key={c.id} className="border border-slate-100 rounded-xl p-3">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-brand">{c.code}</span>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              {editingClassId === c.id ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    value={classEditForm.code}
+                    placeholder="代碼 (例: 3A)"
+                    onChange={(e) =>
+                      setClassEditForm({ ...classEditForm, code: e.target.value })
+                    }
+                    className="rounded border border-slate-200 px-2 py-1 text-sm w-24 font-bold"
+                  />
+                  <input
+                    value={classEditForm.name}
+                    placeholder="名稱 (選填)"
+                    onChange={(e) =>
+                      setClassEditForm({ ...classEditForm, name: e.target.value })
+                    }
+                    className="rounded border border-slate-200 px-2 py-1 text-sm w-32"
+                  />
+                  <button
+                    onClick={() => saveClass(c.id)}
+                    className="rounded bg-brand text-white px-3 py-1 text-xs font-bold"
+                  >
+                    儲存
+                  </button>
+                  <button
+                    onClick={() => setEditingClassId(null)}
+                    className="text-xs text-slate-500 hover:underline"
+                  >
+                    取消
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-brand">{c.code}</span>
+                  {c.name && (
+                    <span className="text-xs text-slate-500">（{c.name}）</span>
+                  )}
+                  <button
+                    onClick={() => startEditClass(c)}
+                    className="text-xs text-slate-400 hover:text-brand underline"
+                  >
+                    編輯班名
+                  </button>
+                </div>
+              )}
+
               <button
                 onClick={async () => {
                   if (!confirm(`刪除班級 ${c.code} 及其所有週次/單字？`)) return;
@@ -193,6 +258,7 @@ function DataPanel({
                 刪除班級
               </button>
             </div>
+
             <div className="mt-2 space-y-2">
               {weeks
                 .filter((w) => w.class_id === c.id)
@@ -343,6 +409,21 @@ function UsersPanel() {
     void load();
   }
 
+  async function changeRole(u: AdminUser, newRole: string) {
+    if (u.role === newRole) return;
+    const res = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: u.id, role: newRole }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "更新角色失敗");
+      return;
+    }
+    void load();
+  }
+
   async function resetPw(u: AdminUser) {
     const pw = prompt(`為「${u.username}」設定新密碼：`);
     if (!pw) return;
@@ -490,11 +571,15 @@ function UsersPanel() {
                       {u.display_name ? `（${u.display_name}）` : ""}
                     </td>
                     <td>
-                      {u.role === "admin"
-                        ? "管理員"
-                        : u.role === "parent"
-                          ? "家長"
-                          : "學生"}
+                      <select
+                        value={u.role}
+                        onChange={(e) => changeRole(u, e.target.value)}
+                        className="rounded border border-slate-200 px-2 py-0.5 text-xs bg-white"
+                      >
+                        <option value="student">學生</option>
+                        <option value="parent">家長</option>
+                        <option value="admin">管理員</option>
+                      </select>
                     </td>
                     <td>{u.role === "student" ? u.points : "—"}</td>
                     <td>{u.role === "student" ? u.unlockedCount : "—"}</td>
