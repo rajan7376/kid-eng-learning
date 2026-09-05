@@ -29,31 +29,31 @@ export default async function AdminPage() {
     page++;
   }
 
-  // 3. 組合清單，維持原本的「帳號 (顯示名稱)」格式
+  // 3. 組合清單：以 user_metadata 或 email 前綴作為正確的帳號顯示
   const users = allAuthUsers.map((u) => {
     const prog = progressMap.get(u.id) || {};
     const care = prog.care || {};
+    const metadata = u.user_metadata || {};
     
-    // 解析帳號名稱 (如 admin, wendy, fifi)
-    const rawEmail = u.email || "";
-    const username = rawEmail.includes("@") ? rawEmail.split("@")[0] : rawEmail;
-    const displayName = (u.user_metadata as any)?.displayName || username.toUpperCase();
+    // 如果 metadata 有記錄自訂帳號，優先使用；否則取 email 的@前面部分
+    const emailPrefix = u.email ? u.email.split("@")[0] : "";
+    const username = metadata.username || metadata.name || emailPrefix || "user";
+    const displayName = metadata.displayName || username.toUpperCase();
     
-    // 判定角色 (admin 或 wendy 為管理員，其餘為學生)
-    const metadataRole = (u.user_metadata as any)?.role;
-    const role = metadataRole || (username === "admin" || username === "wendy" ? "admin" : "student");
+    // 判定角色
+    const role = metadata.role || (username === "admin" || username === "wendy" ? "admin" : "student");
 
     return {
       id: u.id,
-      email: rawEmail,
-      username: username,
+      email: username, // 讓前端顯示正確的帳號名稱
+      fullEmail: u.email,
       displayName: displayName,
       role: role,
       points: prog.points ?? 0,
       unlockedCount: prog.unlocked_count ?? 0,
-      feed: care.feed ?? 3,
-      broom: care.broom ?? 3,
-      diamonds: care.diamonds ?? 0,
+      feed: care.feed ?? (role === "admin" ? "-" : 3),
+      broom: care.broom ?? (role === "admin" ? "-" : 3),
+      diamonds: care.diamonds ?? (role === "admin" ? "-" : 0),
       mistakesCount: 0,
       testCount: Object.keys(care.weekScores || {}).length
     };
