@@ -143,7 +143,7 @@ export default function Zoo({
         <div className="flex justify-between items-center bg-white rounded-2xl p-3 card-shadow">
           <p className="text-sm text-slate-500 font-bold">拖曳動物或裝飾品佈置動物園吧！🐾</p>
           <div className="flex gap-2">
-            <div className="bg-sky-100 text-brand px-3 py-1.5 rounded-full font-bold text-sm flex items-center gap-1">💎 {diamonds}</div>
+            <div className="bg-sky-100 text-brand px-3 py-1.5 rounded-full font-bold text-sm flex items-center gap-1">💎 {currentDiamonds}</div>
             <button onClick={() => setShopOpen(!shopOpen)} className="bg-brand text-white px-4 py-1.5 rounded-full font-bold text-sm hover:scale-105 transition-transform">🛒 商店</button>
           </div>
         </div>
