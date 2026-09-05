@@ -1,69 +1,119 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/authServer";
+import { POINTS_PER_CREATURE, MAX_WEEK_POINTS } from "@/lib/creatures";
+import { taipeiToday, CARE_ITEM_CAP } from "@/lib/rules";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session || session.role !== "student") {
-    return NextResponse.json({ error: "需要學生權限" }, { status: 403 });
-  }
+  if (!session) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
   const { weekId, score, total } = await req.json();
-  if (total === undefined || score === undefined) {
-    return NextResponse.json({ error: "缺少測驗分數資料" }, { status: 400 });
-  }
-
-  const userId = session.sub;
   const admin = createAdminClient();
+  const userId = session.sub;
+  const today = taipeiToday();
 
-  await admin.from("test_results").insert({
-    user_id: userId,
-    week_id: weekId || null,
-    kind: "quiz",
-    score,
-    total,
-  });
-
-  const today = new Date().toLocaleString("en-CA", { timeZone: "Asia/Taipei" }).split(",")[0].trim();
-
-  const { data: progress } = await admin
+  // 1. 取得目前學生進度與 care 狀態
+  const { data: prog } = await admin
     .from("student_progress")
-    .select("*")
+    .select("points, unlocked_count, zoo_positions, care")
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
 
-  let care = progress?.care ? { ...progress.care } : {};
-  let points = progress?.points ?? 0;
-  
+  const currentPoints = prog?.points ?? 0;
+  const prevUnlocked = prog?.unlocked_count ?? 0;
+  let careData = (prog?.care as any) || {
+    lastCleaned: today,
+    poopCount: 0,
+    hungerStage: "ok",
+    feed: 3,
+    broom: 3,
+    diamonds: 0,
+    inventory: {},
+    lastItemDate: null,
+    weekScores: {},
+    diamondWeeks: {}
+  };
+
+  let awarded = 0;
+  let capReached = false;
   let diamondAwarded = false;
-  let feedAwarded = false;
+  let itemAwarded = false;
 
-  if (care.lastFeedEarned !== today) {
-    care.feed = Math.min((care.feed || 0) + 1, 5);
-    care.lastFeedEarned = today;
-    feedAwarded = true;
-  }
+  const isPerfect = total > 0 && score === total;
 
-  if (score === total && total > 0) {
-    if (care.lastDiamondEarned !== today) {
-      care.diamonds = (care.diamonds || 0) + 1;
-      care.lastDiamondEarned = today;
+  if (isPerfect) {
+    // 檢查該週次獲得點數上限 (上限 2 點)
+    const weekScores = careData.weekScores || {};
+    const currentWeekCount = weekScores[weekId] || 0;
+
+    if (currentWeekCount < MAX_WEEK_POINTS) {
+      awarded = 1;
+      weekScores[weekId] = currentWeekCount + 1;
+      careData.weekScores = weekScores;
+    } else {
+      capReached = true;
+    }
+
+    // 鑽石規則：每個課程終身僅能因滿分獲得一次鑽石
+    const diamondWeeks = careData.diamondWeeks || {};
+    if (weekId && !diamondWeeks[weekId]) {
+      diamondWeeks[weekId] = true;
+      careData.diamondWeeks = diamondWeeks;
+      careData.diamonds = (careData.diamonds || 0) + 1;
       diamondAwarded = true;
     }
   }
 
-  await admin
-    .from("student_progress")
-    .update({ care, points })
-    .eq("user_id", userId);
+  // 道具規則：全帳號每天限領一次道具 (不限課程)
+  if (careData.lastItemDate !== today) {
+    careData.lastItemDate = today;
+    itemAwarded = true;
+    const itemRewardType = Math.random() > 0.5 ? "feed" : "broom";
+    if (itemRewardType === "feed") {
+      careData.feed = Math.min(CARE_ITEM_CAP, (careData.feed || 0) + 1);
+    } else {
+      careData.broom = Math.min(CARE_ITEM_CAP, (careData.broom || 0) + 1);
+    }
+  }
+
+  const newPoints = currentPoints + awarded;
+  const newUnlockedCount = Math.floor(newPoints / POINTS_PER_CREATURE);
+
+  const newCare = {
+    ...careData,
+    lastCleaned: careData.lastCleaned || today,
+    poopCount: careData.poopCount ?? 0,
+    hungerStage: careData.hungerStage || "ok",
+    feed: careData.feed ?? 3,
+    broom: careData.broom ?? 3,
+    diamonds: careData.diamonds || 0,
+    inventory: careData.inventory || {},
+    diamondWeeks: careData.diamondWeeks || {}
+  };
+
+  const updatePayload = {
+    user_id: userId,
+    points: newPoints,
+    unlocked_count: newUnlockedCount,
+    care: newCare,
+    updated_at: new Date().toISOString()
+  };
+
+  await admin.from("student_progress").upsert(updatePayload, { onConflict: "user_id" });
 
   return NextResponse.json({
-    ok: true,
+    points: newPoints,
+    unlockedCount: newUnlockedCount,
+    prevUnlocked,
+    awarded,
+    capReached,
     diamondAwarded,
-    feedAwarded,
-    currentDiamonds: care.diamonds || 0
+    itemAwarded,
+    currentDiamonds: newCare.diamonds,
+    care: newCare
   });
 }
