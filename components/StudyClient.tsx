@@ -1,4 +1,4 @@
-"use client";
+import { useRouter } from "next/navigation";`n"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -14,7 +14,7 @@ import ZooBrowser from "./ZooBrowser";
 
 interface Props { classes: ClassRow[]; weeks: WeekRow[]; }
 
-export default function StudyClient({ classes, weeks }: Props) {
+export default function StudyClient({ classes, weeks }: Props) {`n  const router = useRouter();
   const supabase = createClient();
   const [classId, setClassId] = useState(classes[0]?.id ?? "");
   const weekOptions = useMemo(() => weeks.filter((w) => w.class_id === classId), [weeks, classId]);
