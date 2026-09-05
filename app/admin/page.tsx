@@ -8,30 +8,39 @@ export default async function AdminPage() {
   const admin = createAdminClient();
   
   // 1. 取得所有學生的進度資料
-  const { data: students } = await admin
+  const { data: progressList } = await admin
     .from("student_progress")
-    .select("*")
-    .order("updated_at", { ascending: false });
+    .select("*");
 
-  // 2. 從 Supabase Auth 取得所有使用者清單以對應帳號 (Email)
-  const { data: authUsers } = await admin.auth.admin.listUsers();
-  const emailMap = new Map<string, string>();
-  authUsers?.users?.forEach((u) => {
-    if (u.id && u.email) {
-      emailMap.set(u.id, u.email);
-    }
+  const progressMap = new Map<string, any>();
+  progressList?.forEach((p) => {
+    progressMap.set(p.user_id, p);
   });
 
-  // 3. 將 email 結合進學生資料
-  const studentsWithEmail = (students ?? []).map((s) => ({
-    ...s,
-    email: emailMap.get(s.user_id) || s.user_id.substring(0, 12) + "..."
-  }));
+  // 2. 從 Supabase Auth 取得所有使用者與角色清單
+  const { data: authUsers } = await admin.auth.admin.listUsers();
+  
+  const users = (authUsers?.users ?? []).map((u) => {
+    const prog = progressMap.get(u.id) || {};
+    const care = prog.care || {};
+    return {
+      id: u.id,
+      email: u.email || "未命名",
+      role: (u.user_metadata as any)?.role || "student",
+      displayName: (u.user_metadata as any)?.displayName || "",
+      points: prog.points ?? 0,
+      unlockedCount: prog.unlocked_count ?? 0,
+      feed: care.feed ?? 3,
+      broom: care.broom ?? 3,
+      diamonds: care.diamonds ?? 0,
+      mistakesCount: 0, // 可依需求對應
+      testCount: Object.keys(care.weekScores || {}).length
+    };
+  });
 
   return (
-    <main className="max-w-5xl mx-auto p-4 space-y-6">
-      <h1 className="text-2xl font-extrabold text-slate-800">管理後台</h1>
-      <AdminClient students={studentsWithEmail} />
+    <main className="max-w-6xl mx-auto p-4 space-y-6">
+      <AdminClient users={users} />
     </main>
   );
 }
