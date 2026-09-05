@@ -34,7 +34,6 @@ export function useStudent() {
   const [mistakes, setMistakes] = useState<MistakeCard[]>([]);
   const [care, setCare] = useState<CareView | null>(null);
 
-  // 鑽石與裝飾品庫存 (從 care 中解構出來方便使用)
   const [diamonds, setDiamonds] = useState(0);
   const [inventory, setInventory] = useState<Record<string, number>>({});
 
@@ -50,7 +49,6 @@ export function useStudent() {
         setMistakes(d.mistakes ?? []);
         setCare(d.care ?? null);
         
-        // 讀取擴充的欄位
         if (d.care) {
           setDiamonds(d.care.diamonds || 0);
           setInventory(d.care.inventory || {});

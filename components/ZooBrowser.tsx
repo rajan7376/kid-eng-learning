@@ -41,7 +41,7 @@ export default function ZooBrowser() {
   }, []);
 
   function open(userId: string) {
-    fetch("/api/zoo?userId=${userId}")
+    fetch(`/api/zoo?userId=${userId}`)
       .then((r) => r.json())
       .then((d) => !d.error && setView(d));
   }
@@ -82,7 +82,7 @@ export default function ZooBrowser() {
           collection={CREATURES.slice(0, view.unlockedCount)}
           positions={view.zooPositions}
           readOnly
-          title={"🦁 $"{view.name} 的動物園"}
+          title={`🦁 ${view.name} 的動物園`}
         />
 
         <div className="bg-white rounded-2xl p-4 card-shadow space-y-3">

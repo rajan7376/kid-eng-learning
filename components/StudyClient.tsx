@@ -19,12 +19,12 @@ interface Props {
 
 export default function StudyClient({ classes, weeks }: Props) {
   const supabase = createClient();
-  const [classId, setClassId] = useState(classes[0]?.id ?? ");
+  const [classId, setClassId] = useState(classes[0]?.id ?? "");
   const weekOptions = useMemo(
     () => weeks.filter((w) => w.class_id === classId),
     [weeks, classId],
   );
-  const [weekId, setWeekId] = useState(weekOptions[0]?.id ?? ");
+  const [weekId, setWeekId] = useState(weekOptions[0]?.id ?? "");
   const [cards, setCards] = useState<WordCardRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<
@@ -71,7 +71,7 @@ export default function StudyClient({ classes, weeks }: Props) {
   }
 
   useEffect(() => {
-    const first = weeks.filter((w) => w.class_id === classId)[0]?.id ?? ";
+    const first = weeks.filter((w) => w.class_id === classId)[0]?.id ?? "";
     setWeekId(first);
   }, [classId, weeks]);
 
@@ -114,7 +114,7 @@ export default function StudyClient({ classes, weeks }: Props) {
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.code}
-                {c.name ? （$c.name） : ""}
+                {c.name ? `（${c.name}）` : ""}
               </option>
             ))}
           </select>
@@ -130,7 +130,7 @@ export default function StudyClient({ classes, weeks }: Props) {
             {weekOptions.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.week_label}
-                {w.date_range ?  ($w.date_range) : ""}
+                {w.date_range ? ` (${w.date_range})` : ""}
               </option>
             ))}
           </select>
@@ -145,7 +145,7 @@ export default function StudyClient({ classes, weeks }: Props) {
               { k: "test", label: "聽力測驗", disabled: cards.length === 0 },
               {
                 k: "boss",
-                label: "👹 錯字大魔王" + (student.mistakes.length > 0 ?  ($student.mistakes.length) : ""),
+                label: `👹 錯字大魔王${student.mistakes.length > 0 ? ` (${student.mistakes.length})` : ""}`,
               },
               { k: "zoo", label: "🦁 我的動物園" },
               { k: "visit", label: "🌍 逛動物園" },
@@ -156,7 +156,7 @@ export default function StudyClient({ classes, weeks }: Props) {
               key={t.k}
               onClick={() => switchMode(t.k)}
               disabled={t.disabled}
-              className={whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-40 $"{mode === t.k ? "bg-brand text-white" : "text-brand"} $"{testActive && mode === "test" && t.k !== "test" ? "opacity-50" : ""}}
+              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-40 ${mode === t.k ? "bg-brand text-white" : "text-brand"} ${testActive && mode === "test" && t.k !== "test" ? "opacity-50" : ""}`}
             >
               {t.label}
             </button>
@@ -211,7 +211,7 @@ export default function StudyClient({ classes, weeks }: Props) {
             <div className="h-2 rounded-full bg-violet-100 overflow-hidden mt-2">
               <div
                 className="h-full bg-brand transition-all"
-                style={{ width: "$((progress / POINTS_PER_CREATURE) * 100)%" }}
+                style={{ width: `${(progress / POINTS_PER_CREATURE) * 100}%` }}
               />
             </div>
           </div>
