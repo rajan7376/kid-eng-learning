@@ -16,6 +16,7 @@ interface Props { classes: ClassRow[]; weeks: WeekRow[]; }
 
 export default function StudyClient({ classes, weeks }: Props) {
   const router = useRouter();
+  const router = useRouter();
   const supabase = createClient();
   const [classId, setClassId] = useState(classes[0]?.id ?? "");
   const weekOptions = useMemo(() => weeks.filter((w) => w.class_id === classId), [weeks, classId]);
@@ -42,6 +43,7 @@ export default function StudyClient({ classes, weeks }: Props) {
   }, [student.history]);
 
   function switchMode(target: typeof mode) {
+    if (target === 'zoo' || target === 'visit') router.refresh();
     if (target === "zoo" || target === "visit") {
       router.refresh();
     }
