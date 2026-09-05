@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const session = await getSession();
-  if (!session) return NextResponse.json({`n    currentDiamonds: care.diamonds ?? 0, error: "未登入" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
   const admin = createAdminClient();
   await admin
@@ -34,7 +34,7 @@ export async function GET() {
       const age = ageDays(m.created_at);
       if (age > EXPIRE_DAYS) {
         expired.push(m.card_id);
-        return false; // 超過緩衝仍未畢業 → 過期移除
+        return false;
       }
       return true;
     })
@@ -60,7 +60,6 @@ export async function GET() {
       .in("card_id", expired);
   }
 
-  // 動物照顧：首次擁有動物時初始化(設今天已餵/掃 + 起始道具)
   const unlockedCount = progress?.unlocked_count ?? 0;
   const { care, changed } = normalizeCare(progress?.care ?? {}, today, unlockedCount > 0);
   if (changed) {
@@ -70,17 +69,16 @@ export async function GET() {
       .eq("user_id", session.sub);
   }
 
-  return NextResponse.json({`n    currentDiamonds: care.diamonds ?? 0,
-    currentDiamonds: care.diamonds ?? 0,
+  const computedCare = computeCareView(care, today);
+
+  return NextResponse.json({
+    currentDiamonds: computedCare.diamonds ?? 0,
     role: session.role,
     username: session.username,
     points: progress?.points ?? 0,
     unlockedCount,
     zooPositions: progress?.zoo_positions ?? {},
     mistakes,
-    care: computeCareView(care, today),
-  }),
-    mistakes,
-    care: computeCareView(care, today),
+    care: computedCare,
   });
 }
