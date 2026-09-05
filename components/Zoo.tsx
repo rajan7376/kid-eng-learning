@@ -70,7 +70,7 @@ export default function Zoo({
     ? severity.find((s) => care.hungerStage === s || liveMess === s) ?? "ok"
     : "ok";
   const away = !!care && (care.hungerStage === "away" || liveMess === "away");
-  const currentDiamonds = care?.diamonds ?? propDiamonds;
+  const currentDiamonds = (care as any)?.diamonds ?? propDiamonds;
   const showCare = !!care && !readOnly && collection.length > 0;
 
   async function act(fn?: () => Promise<{ ok: boolean; error?: string }>, okMsg = "") {
