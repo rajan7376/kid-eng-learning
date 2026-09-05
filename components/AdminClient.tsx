@@ -8,13 +8,13 @@ interface UserRow {
   email: string;
   role: string;
   displayName?: string;
-  points?: number;
-  unlockedCount?: number;
-  feed?: number;
-  broom?: number;
-  diamonds?: number;
-  mistakesCount?: number;
-  testCount?: number;
+  points?: number | string;
+  unlockedCount?: number | string;
+  feed?: number | string;
+  broom?: number | string;
+  diamonds?: number | string;
+  mistakesCount?: number | string;
+  testCount?: number | string;
 }
 
 interface Props {
@@ -25,14 +25,12 @@ export default function AdminClient({ users }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"accounts" | "data" | "pricing">("accounts");
   
-  // 新增帳號表單狀態
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
   const [newRole, setNewRole] = useState("student");
   const [loading, setLoading] = useState(false);
 
-  // 建立帳號
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault();
     if (!newEmail || !newPassword) {
@@ -63,7 +61,6 @@ export default function AdminClient({ users }: Props) {
     }
   }
 
-  // 變更角色權限
   async function handleRoleChange(userId: string, newRoleVal: string) {
     try {
       const res = await fetch("/api/admin/user-role", {
@@ -82,7 +79,6 @@ export default function AdminClient({ users }: Props) {
     }
   }
 
-  // 快速調整道具 / 鑽石 / 進度
   async function handleQuickAction(userId: string, actionType: string) {
     let inputVal = prompt(
       actionType === "diamonds" ? "請輸入新的鑽石數量：" :
@@ -140,7 +136,6 @@ export default function AdminClient({ users }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* 頂端導覽列 */}
       <div className="flex justify-between items-center bg-white p-4 rounded-2xl card-shadow">
         <h1 className="text-xl font-extrabold text-slate-800">管理後台</h1>
         <div className="flex gap-4 text-sm font-bold">
@@ -167,7 +162,6 @@ export default function AdminClient({ users }: Props) {
 
       {activeTab === "accounts" && (
         <div className="space-y-6">
-          {/* 新增帳號區塊 */}
           <div className="bg-white p-6 rounded-2xl card-shadow space-y-4">
             <h2 className="text-lg font-bold text-slate-700">新增帳號</h2>
             <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -212,7 +206,6 @@ export default function AdminClient({ users }: Props) {
             </form>
           </div>
 
-          {/* 帳號清單區塊 */}
           <div className="bg-white p-6 rounded-2xl card-shadow space-y-4 overflow-x-auto">
             <h2 className="text-lg font-bold text-slate-700">帳號清單</h2>
             <table className="w-full text-left border-collapse text-sm">
@@ -246,13 +239,13 @@ export default function AdminClient({ users }: Props) {
                         <option value="admin">管理員</option>
                       </select>
                     </td>
-                    <td className="p-3">{u.points ?? "-"}</td>
-                    <td className="p-3">{u.unlockedCount ?? "-"}</td>
-                    <td className="p-3">{u.feed ?? "-"}</td>
-                    <td className="p-3">{u.broom ?? "-"}</td>
-                    <td className="p-3 font-bold text-violet-600">{u.diamonds ?? "-"}</td>
-                    <td className="p-3">{u.mistakesCount ?? "-"}</td>
-                    <td className="p-3">{u.testCount ?? "-"}</td>
+                    <td className="p-3">{u.points}</td>
+                    <td className="p-3">{u.unlockedCount}</td>
+                    <td className="p-3">{u.feed}</td>
+                    <td className="p-3">{u.broom}</td>
+                    <td className="p-3 font-bold text-violet-600">{u.diamonds}</td>
+                    <td className="p-3">{u.mistakesCount}</td>
+                    <td className="p-3">{u.testCount}</td>
                     <td className="p-3 space-x-2 whitespace-nowrap text-xs">
                       {u.role === "student" && (
                         <>
