@@ -34,7 +34,7 @@ export default async function AdminPage() {
 
     return {
       id: u.id,
-      email: u.username, // 讓前端表格的「帳號」欄位顯示 username (如 wendy, fifi)
+      email: u.username,
       displayName: u.display_name || "",
       role: u.role || "student",
       points: isAdmin ? "-" : (prog.points ?? 0),
@@ -45,6 +45,13 @@ export default async function AdminPage() {
       mistakesCount: 0,
       testCount: isAdmin ? "-" : Object.keys(care.weekScores || {}).length
     };
+  });
+
+  // 4. 排序：管理員排在前面，其餘按帳號名稱排序
+  users.sort((a, b) => {
+    if (a.role === "admin" && b.role !== "admin") return -1;
+    if (a.role !== "admin" && b.role === "admin") return 1;
+    return a.email.localeCompare(b.email);
   });
 
   return (
