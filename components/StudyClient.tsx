@@ -53,7 +53,6 @@ export default function StudyClient({ classes, weeks }: Props) {
   async function handleTestComplete(score: number, total: number) {
     const r = await student.completeQuiz(weekId || null, score, total);
     
-    // 如果拿到點數 (原本的解鎖動物進度)
     if (r.awarded > 0) {
       setCelebration({ 
         title: "🎉 滿分！+1 點", 
@@ -61,7 +60,6 @@ export default function StudyClient({ classes, weeks }: Props) {
         diamondAwarded: r.diamondAwarded 
       });
     } 
-    // 如果該週點數已滿，但還是滿分 (判斷今日是否首次發鑽)
     else if (score === total && total > 0) {
       setCelebration({
         title: "🎉 滿分！",
@@ -105,7 +103,6 @@ export default function StudyClient({ classes, weeks }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* 上方獨立選單區：班級 / 週次 */}
       <div className="flex flex-col sm:flex-row gap-3 bg-white rounded-2xl p-4 card-shadow">
         <label className="flex-1 text-sm font-bold text-slate-600">
           班級
@@ -140,7 +137,6 @@ export default function StudyClient({ classes, weeks }: Props) {
         </label>
       </div>
 
-      {/* 功能分頁：手機可橫向捲動 */}
       <div className="-mx-4 px-4 overflow-x-auto">
         <div className="flex w-max gap-1 rounded-full bg-violet-50 p-1">
           {(
@@ -224,6 +220,9 @@ export default function StudyClient({ classes, weeks }: Props) {
             positions={student.zooPositions}
             onSave={student.saveZoo}
             care={student.care}
+            diamonds={student.diamonds}
+            inventory={student.inventory}
+            onBuyDecoration={student.buyDecoration}
             onFeed={student.feedPets}
             onClean={student.cleanPets}
           />
@@ -238,7 +237,6 @@ export default function StudyClient({ classes, weeks }: Props) {
               <p className="text-slate-600">{celebration.subtitle}</p>
             )}
             
-            {/* 滿分送鑽動畫 */}
             {celebration.diamondAwarded && (
               <div className="flex flex-col items-center justify-center animate-bounce py-2">
                 <span className="text-6xl drop-shadow-md">💎</span>
