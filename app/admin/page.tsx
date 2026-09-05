@@ -17,7 +17,7 @@ export default async function AdminPage() {
     progressMap.set(p.user_id, p);
   });
 
-  // 2. 從 Supabase Auth 完整撈取所有使用者 (處理分頁避免遺漏)
+  // 2. 從 Supabase Auth 完整撈取所有使用者
   let allAuthUsers: any[] = [];
   let page = 1;
   const perPage = 50;
@@ -29,19 +29,26 @@ export default async function AdminPage() {
     page++;
   }
 
-  // 3. 組合清單
+  // 3. 組合清單，維持原本的「帳號 (顯示名稱)」格式
   const users = allAuthUsers.map((u) => {
     const prog = progressMap.get(u.id) || {};
     const care = prog.care || {};
     
-    // 檢查是不是管理員 (可依你的專案 metadata 或 email 判斷，例如 rajan 相關或 metadata.role)
-    const rawRole = (u.user_metadata as any)?.role || (u.email?.includes("admin") ? "admin" : "student");
+    // 解析帳號名稱 (如 admin, wendy, fifi)
+    const rawEmail = u.email || "";
+    const username = rawEmail.includes("@") ? rawEmail.split("@")[0] : rawEmail;
+    const displayName = (u.user_metadata as any)?.displayName || username.toUpperCase();
+    
+    // 判定角色 (admin 或 wendy 為管理員，其餘為學生)
+    const metadataRole = (u.user_metadata as any)?.role;
+    const role = metadataRole || (username === "admin" || username === "wendy" ? "admin" : "student");
 
     return {
       id: u.id,
-      email: u.email || "未命名",
-      role: rawRole,
-      displayName: (u.user_metadata as any)?.displayName || "",
+      email: rawEmail,
+      username: username,
+      displayName: displayName,
+      role: role,
       points: prog.points ?? 0,
       unlockedCount: prog.unlocked_count ?? 0,
       feed: care.feed ?? 3,
