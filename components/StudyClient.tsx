@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -19,12 +19,12 @@ interface Props {
 
 export default function StudyClient({ classes, weeks }: Props) {
   const supabase = createClient();
-  const [classId, setClassId] = useState(classes[0]?.id ?? "");
+  const [classId, setClassId] = useState(classes[0]?.id ?? ");
   const weekOptions = useMemo(
     () => weeks.filter((w) => w.class_id === classId),
     [weeks, classId],
   );
-  const [weekId, setWeekId] = useState(weekOptions[0]?.id ?? "");
+  const [weekId, setWeekId] = useState(weekOptions[0]?.id ?? ");
   const [cards, setCards] = useState<WordCardRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<
@@ -37,6 +37,7 @@ export default function StudyClient({ classes, weeks }: Props) {
     title: string;
     subtitle?: string;
     newly: Creature[];
+    diamondAwarded?: boolean;
   } | null>(null);
   const [testActive, setTestActive] = useState(false);
 
@@ -51,19 +52,28 @@ export default function StudyClient({ classes, weeks }: Props) {
 
   async function handleTestComplete(score: number, total: number) {
     const r = await student.completeQuiz(weekId || null, score, total);
+    
+    // 如果拿到點數 (原本的解鎖動物進度)
     if (r.awarded > 0) {
-      setCelebration({ title: "🎉 滿分！+1 點", newly: r.newly });
-    } else if (r.capReached) {
+      setCelebration({ 
+        title: "🎉 滿分！+1 點", 
+        newly: r.newly,
+        diamondAwarded: r.diamondAwarded 
+      });
+    } 
+    // 如果該週點數已滿，但還是滿分 (判斷今日是否首次發鑽)
+    else if (score === total && total > 0) {
       setCelebration({
         title: "🎉 滿分！",
-        subtitle: "這個單字表的獎勵點數已經拿滿囉（上限 2 點）",
+        subtitle: r.diamondAwarded ? "獲得每日滿分鑽石獎勵！" : "這個單字表的點數已拿滿囉 (上限2點)",
         newly: [],
+        diamondAwarded: r.diamondAwarded
       });
     }
   }
 
   useEffect(() => {
-    const first = weeks.filter((w) => w.class_id === classId)[0]?.id ?? "";
+    const first = weeks.filter((w) => w.class_id === classId)[0]?.id ?? ";
     setWeekId(first);
   }, [classId, weeks]);
 
@@ -107,7 +117,7 @@ export default function StudyClient({ classes, weeks }: Props) {
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.code}
-                {c.name ? `（${c.name}）` : ""}
+                {c.name ? （$c.name） : ""}
               </option>
             ))}
           </select>
@@ -123,7 +133,7 @@ export default function StudyClient({ classes, weeks }: Props) {
             {weekOptions.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.week_label}
-                {w.date_range ? ` (${w.date_range})` : ""}
+                {w.date_range ?  ($w.date_range) : ""}
               </option>
             ))}
           </select>
@@ -139,7 +149,7 @@ export default function StudyClient({ classes, weeks }: Props) {
               { k: "test", label: "聽力測驗", disabled: cards.length === 0 },
               {
                 k: "boss",
-                label: `👹 錯字大魔王${student.mistakes.length > 0 ? ` (${student.mistakes.length})` : ""}`,
+                label: "👹 錯字大魔王" + (student.mistakes.length > 0 ?  ($student.mistakes.length) : ""),
               },
               { k: "zoo", label: "🦁 我的動物園" },
               { k: "visit", label: "🌍 逛動物園" },
@@ -150,9 +160,7 @@ export default function StudyClient({ classes, weeks }: Props) {
               key={t.k}
               onClick={() => switchMode(t.k)}
               disabled={t.disabled}
-              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-40 ${
-                mode === t.k ? "bg-brand text-white" : "text-brand"
-              } ${testActive && mode === "test" && t.k !== "test" ? "opacity-50" : ""}`}
+              className={whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-40 $"{mode === t.k ? "bg-brand text-white" : "text-brand"} $"{testActive && mode === "test" && t.k !== "test" ? "opacity-50" : ""}}
             >
               {t.label}
             </button>
@@ -207,7 +215,7 @@ export default function StudyClient({ classes, weeks }: Props) {
             <div className="h-2 rounded-full bg-violet-100 overflow-hidden mt-2">
               <div
                 className="h-full bg-brand transition-all"
-                style={{ width: `${(progress / POINTS_PER_CREATURE) * 100}%` }}
+                style={{ width: "$((progress / POINTS_PER_CREATURE) * 100)%" }}
               />
             </div>
           </div>
@@ -229,6 +237,15 @@ export default function StudyClient({ classes, weeks }: Props) {
             {celebration.subtitle && (
               <p className="text-slate-600">{celebration.subtitle}</p>
             )}
+            
+            {/* 滿分送鑽動畫 */}
+            {celebration.diamondAwarded && (
+              <div className="flex flex-col items-center justify-center animate-bounce py-2">
+                <span className="text-6xl drop-shadow-md">💎</span>
+                <span className="text-brand font-bold mt-2">+1 鑽石</span>
+              </div>
+            )}
+
             {celebration.newly.length > 0 ? (
               <>
                 <p className="text-slate-600">解鎖新朋友！</p>
