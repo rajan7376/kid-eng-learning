@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { CREATURES, type Creature } from "./creatures";
@@ -21,6 +21,7 @@ export interface QuizResult {
   awarded: number;
   capReached: boolean;
   newly: Creature[];
+  diamondAwarded?: boolean;
 }
 
 export type ZooPositions = Record<string, { x: number; y: number }>;
@@ -33,6 +34,10 @@ export function useStudent() {
   const [mistakes, setMistakes] = useState<MistakeCard[]>([]);
   const [care, setCare] = useState<CareView | null>(null);
 
+  // 鑽石與裝飾品庫存 (從 care 中解構出來方便使用)
+  const [diamonds, setDiamonds] = useState(0);
+  const [inventory, setInventory] = useState<Record<string, number>>({});
+
   useEffect(() => {
     let active = true;
     fetch("/api/student/state")
@@ -44,6 +49,12 @@ export function useStudent() {
         setZooPositions(d.zooPositions ?? {});
         setMistakes(d.mistakes ?? []);
         setCare(d.care ?? null);
+        
+        // 讀取擴充的欄位
+        if (d.care) {
+          setDiamonds(d.care.diamonds || 0);
+          setInventory(d.care.inventory || {});
+        }
       })
       .finally(() => active && setLoading(false));
     return () => {
@@ -51,7 +62,6 @@ export function useStudent() {
     };
   }, []);
 
-  // 完成測驗：記成績 + 依週次上限加分；回傳獎勵狀態
   const completeQuiz = useCallback(
     async (
       weekId: string | null,
@@ -68,16 +78,32 @@ export function useStudent() {
       setPoints(d.points);
       setUnlockedCount(d.unlockedCount);
       if (d.care) setCare(d.care);
+      if (d.currentDiamonds !== undefined) setDiamonds(d.currentDiamonds);
+      
       return {
         awarded: d.awarded,
         capReached: d.capReached,
         newly: CREATURES.slice(d.prevUnlocked, d.unlockedCount),
+        diamondAwarded: d.diamondAwarded
       };
     },
     [],
   );
 
-  // 每日複習一個錯字；滿天數答對 → 畢業 +1 點
+  const buyDecoration = useCallback(async (itemId: string) => {
+    const res = await fetch("/api/student/shop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId }),
+    });
+    const d = await res.json();
+    if (d.error) return { ok: false, error: d.error };
+    
+    setDiamonds(d.currentDiamonds);
+    setInventory(d.inventory);
+    return { ok: true };
+  }, []);
+
   const reviewMistake = useCallback(
     async (
       cardId: string,
@@ -96,7 +122,6 @@ export function useStudent() {
         setUnlockedCount(d.unlockedCount);
         return { graduated: true, newly: CREATURES.slice(d.prevUnlocked, d.unlockedCount) };
       }
-      // 標記今天已複習
       setMistakes((prev) =>
         prev.map((m) => (m.id === cardId ? { ...m, reviewedToday: true } : m)),
       );
@@ -168,8 +193,11 @@ export function useStudent() {
     zooPositions,
     mistakes,
     care,
+    diamonds,
+    inventory,
     collection: CREATURES.slice(0, unlockedCount),
     completeQuiz,
+    buyDecoration,
     reviewMistake,
     feedPets,
     cleanPets,

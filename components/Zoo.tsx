@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import type { Creature } from "@/lib/creatures";
 import type { CareView, ZooPositions } from "@/lib/useStudent";
 import { POOP_AWAY, POOP_HOURS, POOP_SICK, POOP_WARN } from "@/lib/rules";
+import { DECORATIONS } from "@/lib/decorations";
 
 function poopStage(p: number): CareView["messStage"] {
   if (p >= POOP_AWAY) return "away";
@@ -21,7 +22,6 @@ const MOOD: Record<CareView["hungerStage"], string> = {
   away: "🏃",
 };
 
-// 大便固定散落位置(草地區)
 const POOP_SPOTS = [
   { x: 40, y: 250 },
   { x: 180, y: 300 },
@@ -47,6 +47,9 @@ export default function Zoo({
   readOnly = false,
   title = "🦁 我的動物園",
   care,
+  diamonds = 0,
+  inventory = {},
+  onBuyDecoration,
   onFeed,
   onClean,
 }: {
@@ -56,15 +59,19 @@ export default function Zoo({
   readOnly?: boolean;
   title?: string;
   care?: CareView | null;
+  diamonds?: number;
+  inventory?: Record<string, number>;
+  onBuyDecoration?: (itemId: string) => Promise<{ ok: boolean; error?: string }>;
   onFeed?: () => Promise<{ ok: boolean; error?: string }>;
   onClean?: () => Promise<{ ok: boolean; error?: string }>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<ZooPositions>(positions);
-  const drag = useRef<{ i: number; dx: number; dy: number } | null>(null);
+  const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
   const [msg, setMsg] = useState("");
+  const [shopOpen, setShopOpen] = useState(false);
+  const [buying, setBuying] = useState(false);
 
-  // 大便數即時推算(每 5 秒重算，不必刷新頁面)
   const [nowTs, setNowTs] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNowTs(Date.now()), 5000);
@@ -95,6 +102,23 @@ export default function Zoo({
     setMsg(r.ok ? okMsg : r.error ?? "");
   }
 
+  async function handleBuy(itemId: string) {
+    if (!onBuyDecoration || buying) return;
+    setBuying(true);
+    const r = await onBuyDecoration(itemId);
+    if (r.ok) {
+      setMsg("✨ 購買成功！裝飾品已經放到動物園左上角囉！");
+      // 給新買的物品一個初始位置
+      const newItemKey = "deco_" + itemId + "_" + Date.now();
+      const nextPos = { ...pos, [newItemKey]: { x: 20, y: 20 } };
+      setPos(nextPos);
+      onSave?.(nextPos);
+    } else {
+      setMsg(r.error || "購買失敗");
+    }
+    setBuying(false);
+  }
+
   useEffect(() => {
     setPos(positions);
   }, [positions]);
@@ -113,16 +137,15 @@ export default function Zoo({
     };
   }
 
-  function onPointerDown(e: React.PointerEvent, i: number) {
+  function onPointerDown(e: React.PointerEvent, dragId: string, initialPos: Pos) {
     if (readOnly) return;
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const cur = pos[i] ?? defaultPos(i);
     drag.current = {
-      i,
-      dx: e.clientX - rect.left - cur.x,
-      dy: e.clientY - rect.top - cur.y,
+      id: dragId,
+      dx: e.clientX - rect.left - initialPos.x,
+      dy: e.clientY - rect.top - initialPos.y,
     };
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   }
@@ -136,7 +159,7 @@ export default function Zoo({
       x: e.clientX - rect.left - d.dx,
       y: e.clientY - rect.top - d.dy,
     });
-    setPos((p) => ({ ...p, [d.i]: next }));
+    setPos((p) => ({ ...p, [d.id]: next }));
   }
 
   function onPointerUp() {
@@ -144,13 +167,56 @@ export default function Zoo({
     drag.current = null;
     onSave?.(pos);
   }
+  
+  // 處理畫面上所有的已放置裝飾品
+  const placedDecos = Object.keys(pos).filter(k => k.startsWith("deco_"));
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 relative">
       {!readOnly && (
-        <p className="text-sm text-slate-500">
-          拖曳動物，把牠們放到動物園裡喜歡的位置吧！🐾
-        </p>
+        <div className="flex justify-between items-center bg-white rounded-2xl p-3 card-shadow">
+          <p className="text-sm text-slate-500 font-bold">
+            拖曳動物或裝飾品佈置動物園吧！🐾
+          </p>
+          <div className="flex gap-2">
+            <div className="bg-sky-100 text-brand px-3 py-1.5 rounded-full font-bold text-sm flex items-center gap-1">
+              💎 {diamonds}
+            </div>
+            <button
+              onClick={() => setShopOpen(!shopOpen)}
+              className="bg-brand text-white px-4 py-1.5 rounded-full font-bold text-sm hover:scale-105 transition-transform"
+            >
+              🛒 商店
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 商店面板 */}
+      {shopOpen && !readOnly && (
+        <div className="bg-white rounded-2xl p-4 card-shadow border-2 border-brand/20">
+          <h3 className="font-bold text-brand mb-3">裝飾品商店</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {DECORATIONS.map(d => {
+              const owned = inventory[d.id] || 0;
+              const affordable = diamonds >= d.price;
+              return (
+                <div key={d.id} className="flex flex-col items-center p-2 rounded-xl bg-violet-50 border border-violet-100">
+                  <span className="text-4xl">{d.emoji}</span>
+                  <span className="font-bold text-sm mt-1">{d.name}</span>
+                  <span className="text-xs text-slate-500 mb-2">已擁有: {owned}</span>
+                  <button 
+                    onClick={() => handleBuy(d.id)}
+                    disabled={!affordable || buying}
+                    className={"px-3 py-1 rounded-full text-xs font-bold w-full flex justify-center gap-1 $"{affordable ? "bg-brand text-white" : "bg-slate-200 text-slate-400"}}
+                  >
+                    <span>💎</span> {d.price}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       )}
 
       {showCare && care && (
@@ -183,17 +249,6 @@ export default function Zoo({
               🧹 打掃（{care.broom}）
             </button>
           </div>
-          <p className="text-xs text-slate-400">
-            {away
-              ? "動物們離家出走了！今天餵食＋打掃就會把牠們找回來～"
-              : [
-                  care.fedToday ? "今天餵過了" : `已 ${care.daysSinceFed} 天沒餵食`,
-                  livePoop > 0 ? `地上有 ${livePoop} 坨大便` : "很乾淨",
-                ].join("・")}
-          </p>
-          <p className="text-[11px] text-slate-300">
-            飼料來自每天完成測驗、掃把來自每天複習錯字大魔王。每 12 小時長 1 坨大便；太久沒餵或沒打掃，動物會生病甚至離家出走。
-          </p>
           {msg && <p className="text-xs text-brand font-bold">{msg}</p>}
         </div>
       )}
@@ -209,28 +264,20 @@ export default function Zoo({
         }}
       >
         <div className="pointer-events-none absolute inset-0 text-3xl">
-          <span className="absolute right-4 top-3 text-4xl">☀️</span>
-          <span className="absolute left-3 top-24">🌳</span>
-          <span className="absolute right-10 top-28">🌴</span>
           <span className="absolute left-1/2 top-20 -translate-x-1/2 text-xl font-extrabold text-amber-800 bg-white/70 rounded-full px-3 py-1 whitespace-nowrap">
             {title}
           </span>
-          <span className="absolute bottom-2 left-6">🌷</span>
-          <span className="absolute bottom-3 right-8">🌻</span>
-          <span className="absolute bottom-1 left-1/3">🪨</span>
         </div>
 
-        {collection.length === 0 && (
+        {collection.length === 0 && placedDecos.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-center px-6">
             <p className="bg-white/80 rounded-xl px-4 py-3 text-slate-600 font-bold">
-              還沒有動物～完成「聽力測驗」拿到滿分累積點數，
-              <br />
-              每 5 點就能解鎖一隻可愛動物放進來！
+              還沒有動物～完成「聽力測驗」拿到滿分累積點數解鎖動物，<br/>
+              或者拿到滿分鑽石去商店買裝飾品吧！
             </p>
           </div>
         )}
 
-        {/* 髒污：依大便數實際畫出便便(最多 10 坨) */}
         {!readOnly && care && !away && livePoop > 0 && collection.length > 0 && (
           <div className="pointer-events-none absolute inset-0 text-2xl">
             {POOP_SPOTS.slice(0, Math.min(livePoop, POOP_SPOTS.length)).map(
@@ -243,7 +290,6 @@ export default function Zoo({
           </div>
         )}
 
-        {/* 離家出走 */}
         {away && (
           <div className="absolute inset-0 flex items-center justify-center text-center px-6">
             <p className="bg-white/85 rounded-xl px-4 py-3 text-slate-600 font-bold">
@@ -253,18 +299,41 @@ export default function Zoo({
             </p>
           </div>
         )}
-
-        {!away &&
-          collection.map((c, i) => {
-          const p = pos[i] ?? defaultPos(i);
+        
+        {/* 渲染裝飾品 */}
+        {placedDecos.map(key => {
+          const baseId = key.split("_")[1]; // deco_tree_pine_123456 -> tree_pine
+          const deco = DECORATIONS.find(d => d.id === baseId);
+          if (!deco) return null;
+          const p = pos[key];
           return (
             <button
-              key={i}
-              onPointerDown={(e) => onPointerDown(e, i)}
-              title={c.name}
-              className={`absolute text-4xl touch-none ${
+              key={key}
+              onPointerDown={(e) => onPointerDown(e, key, p)}
+              title={deco.name}
+              className={"absolute text-4xl touch-none $"{
                 readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"
-              }`}
+              }}
+              style={{ left: p.x, top: p.y }}
+            >
+              {deco.emoji}
+            </button>
+          )
+        })}
+
+        {/* 渲染動物 */}
+        {!away &&
+          collection.map((c, i) => {
+          const dragId = String(i);
+          const p = pos[dragId] ?? defaultPos(i);
+          return (
+            <button
+              key={dragId}
+              onPointerDown={(e) => onPointerDown(e, dragId, p)}
+              title={c.name}
+              className={"absolute text-4xl touch-none $"{
+                readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+              }}
               style={{ left: p.x, top: p.y }}
             >
               {c.emoji}
