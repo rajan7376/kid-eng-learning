@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "未登入" }, { status: 401 });
+  if (!session) return NextResponse.json({`n    currentDiamonds: care.diamonds ?? 0, error: "未登入" }, { status: 401 });
 
   const admin = createAdminClient();
   await admin
@@ -70,7 +70,7 @@ export async function GET() {
       .eq("user_id", session.sub);
   }
 
-  return NextResponse.json({
+  return NextResponse.json({`n    currentDiamonds: care.diamonds ?? 0,
     currentDiamonds: care.diamonds ?? 0,
     role: session.role,
     username: session.username,
