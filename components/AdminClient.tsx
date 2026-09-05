@@ -98,6 +98,10 @@ function DataPanel({
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [classEditForm, setClassEditForm] = useState({ code: "", name: "" });
 
+  // 週次與日期編輯狀態
+  const [editingWeekId, setEditingWeekId] = useState<string | null>(null);
+  const [weekEditForm, setWeekEditForm] = useState({ week_label: "", date_range: "" });
+
   async function upload(e: React.FormEvent) {
     e.preventDefault();
     if (files.length === 0) return;
@@ -157,6 +161,28 @@ function DataPanel({
       name: classEditForm.name.trim() || null,
     });
     setEditingClassId(null);
+    router.refresh();
+  }
+
+  function startEditWeek(w: WeekRow, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingWeekId(w.id);
+    setWeekEditForm({
+      week_label: w.week_label,
+      date_range: w.date_range ?? "",
+    });
+  }
+
+  async function saveWeek(id: string) {
+    if (!weekEditForm.week_label.trim()) {
+      alert("週次名稱不能為空");
+      return;
+    }
+    await dataOp("updateWeek", id, {
+      week_label: weekEditForm.week_label.trim(),
+      date_range: weekEditForm.date_range.trim() || null,
+    });
+    setEditingWeekId(null);
     router.refresh();
   }
 
@@ -264,15 +290,57 @@ function DataPanel({
                 .filter((w) => w.class_id === c.id)
                 .map((w) => (
                   <div key={w.id} className="rounded-lg bg-violet-50 p-2">
-                    <div className="flex items-center justify-between">
-                      <button
-                        onClick={() => loadCards(w.id)}
-                        className="font-bold text-slate-700"
-                      >
-                        {w.week_label}
-                        {w.date_range ? ` (${w.date_range})` : ""}{" "}
-                        {openWeek === w.id ? "▲" : "▼"}
-                      </button>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      {editingWeekId === w.id ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <input
+                            value={weekEditForm.week_label}
+                            placeholder="週次 (例: W1)"
+                            onChange={(e) =>
+                              setWeekEditForm({ ...weekEditForm, week_label: e.target.value })
+                            }
+                            className="rounded border border-slate-200 px-2 py-1 text-sm w-28 font-bold"
+                          />
+                          <input
+                            value={weekEditForm.date_range}
+                            placeholder="日期 (例: 08/31-09/04)"
+                            onChange={(e) =>
+                              setWeekEditForm({ ...weekEditForm, date_range: e.target.value })
+                            }
+                            className="rounded border border-slate-200 px-2 py-1 text-sm w-44"
+                          />
+                          <button
+                            onClick={() => saveWeek(w.id)}
+                            className="rounded bg-brand text-white px-3 py-1 text-xs font-bold"
+                          >
+                            儲存
+                          </button>
+                          <button
+                            onClick={() => setEditingWeekId(null)}
+                            className="text-xs text-slate-500 hover:underline"
+                          >
+                            取消
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => loadCards(w.id)}
+                            className="font-bold text-slate-700 hover:text-brand"
+                          >
+                            {w.week_label}
+                            {w.date_range ? ` (${w.date_range})` : ""}{" "}
+                            {openWeek === w.id ? "▲" : "▼"}
+                          </button>
+                          <button
+                            onClick={(e) => startEditWeek(w, e)}
+                            className="text-xs text-slate-400 hover:text-brand underline"
+                          >
+                            編輯日期/週次
+                          </button>
+                        </div>
+                      )}
+
                       <button
                         onClick={async () => {
                           if (!confirm("刪除此週次及其單字？")) return;
@@ -285,6 +353,7 @@ function DataPanel({
                         刪除週次
                       </button>
                     </div>
+
                     {openWeek === w.id && (
                       <div className="mt-2 space-y-2">
                         {cards.map((card) => (
