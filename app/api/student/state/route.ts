@@ -72,7 +72,7 @@ export async function GET() {
   const computedCare = computeCareView(care, today);
 
   return NextResponse.json({
-    currentDiamonds: computedCare.diamonds ?? 0,
+    currentDiamonds: (care as any).diamonds ?? 0,
     role: session.role,
     username: session.username,
     points: progress?.points ?? 0,
