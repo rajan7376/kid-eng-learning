@@ -82,10 +82,10 @@ export default function StudyClient({ classes, weeks }: Props) {
             {weekOptions.length === 0 && <option value="">（無）</option>}
             {weekOptions.map((w) => {
               const best = bestScores.get(w.id);
-              const scoreTag = best ? ` [最高: ${best.score}/${best.total}]` : "";
+                const scoreTag = best ? " [最高: " + best.score + "/" + best.total + "]" : "";
               return (
                 <option key={w.id} value={w.id}>
-                  {w.week_label}{w.date_range ? ` (${w.date_range})` : ""}{scoreTag}
+                  {w.week_label}{w.date_range ? " (" + w.date_range + ")" : ""}{scoreTag}
                 </option>
               )
             })}
