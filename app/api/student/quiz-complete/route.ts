@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/authServer";
-import { POINTS_PER_CREATURE, MAX_WEEK_POINTS } from "@/lib/creatures";
-import { taipeiToday, CARE_ITEM_CAP } from "@/lib/rules";
+import { POINTS_PER_CREATURE } from "@/lib/creatures";
+import { taipeiToday, CARE_ITEM_CAP, MAX_WEEK_POINTS } from "@/lib/rules";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
