@@ -17,23 +17,37 @@ export default async function AdminPage() {
     progressMap.set(p.user_id, p);
   });
 
-  // 2. 從 Supabase Auth 取得所有使用者與角色清單
-  const { data: authUsers } = await admin.auth.admin.listUsers();
-  
-  const users = (authUsers?.users ?? []).map((u) => {
+  // 2. 從 Supabase Auth 完整撈取所有使用者 (處理分頁避免遺漏)
+  let allAuthUsers: any[] = [];
+  let page = 1;
+  const perPage = 50;
+  while (true) {
+    const { data: res, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error || !res?.users || res.users.length === 0) break;
+    allAuthUsers = allAuthUsers.concat(res.users);
+    if (res.users.length < perPage) break;
+    page++;
+  }
+
+  // 3. 組合清單
+  const users = allAuthUsers.map((u) => {
     const prog = progressMap.get(u.id) || {};
     const care = prog.care || {};
+    
+    // 檢查是不是管理員 (可依你的專案 metadata 或 email 判斷，例如 rajan 相關或 metadata.role)
+    const rawRole = (u.user_metadata as any)?.role || (u.email?.includes("admin") ? "admin" : "student");
+
     return {
       id: u.id,
       email: u.email || "未命名",
-      role: (u.user_metadata as any)?.role || "student",
+      role: rawRole,
       displayName: (u.user_metadata as any)?.displayName || "",
       points: prog.points ?? 0,
       unlockedCount: prog.unlocked_count ?? 0,
       feed: care.feed ?? 3,
       broom: care.broom ?? 3,
       diamonds: care.diamonds ?? 0,
-      mistakesCount: 0, // 可依需求對應
+      mistakesCount: 0,
       testCount: Object.keys(care.weekScores || {}).length
     };
   });
