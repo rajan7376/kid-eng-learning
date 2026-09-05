@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 interface StudentProgressRow {
   user_id: string;
+  email: string;
   points: number;
   unlocked_count: number;
   care: any;
@@ -83,7 +84,7 @@ export default function AdminClient({ students }: Props) {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-slate-100 text-sm text-slate-500">
-              <th className="p-3">學生編號 (ID)</th>
+              <th className="p-3">學生帳號 (Email)</th>
               <th className="p-3">學習點數</th>
               <th className="p-3">💎 鑽石</th>
               <th className="p-3">🥕 飼料</th>
@@ -97,7 +98,7 @@ export default function AdminClient({ students }: Props) {
               const isSaving = loadingId === userId;
               return (
                 <tr key={userId} className="hover:bg-violet-50/50">
-                  <td className="p-3 font-mono text-xs text-slate-500">{userId.substring(0, 12)}...</td>
+                  <td className="p-3 font-medium text-slate-700">{s.email}</td>
                   <td className="p-3">
                     <input
                       type="number"
