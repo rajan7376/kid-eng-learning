@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { CREATURES } from "@/lib/creatures";
@@ -9,7 +9,6 @@ interface ZooItem {
   userId: string;
   name: string;
   unlockedCount: number;
-  diamondCount: number;
   isMe: boolean;
 }
 interface Comment {
@@ -23,8 +22,6 @@ interface ViewData {
   name: string;
   unlockedCount: number;
   zooPositions: ZooPositions;
-  diamondCount: number;
-  likedByMe: boolean;
   comments: Comment[];
 }
 
@@ -44,20 +41,9 @@ export default function ZooBrowser() {
   }, []);
 
   function open(userId: string) {
-    fetch(`/api/zoo?userId=${userId}`)
+    fetch("/api/zoo?userId=${userId}")
       .then((r) => r.json())
       .then((d) => !d.error && setView(d));
-  }
-
-  async function toggleDiamond() {
-    if (!view) return;
-    const res = await fetch("/api/zoo", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "diamond", ownerId: view.ownerId }),
-    });
-    const d = await res.json();
-    setView({ ...view, likedByMe: d.liked, diamondCount: d.count });
   }
 
   async function sendComment(e: React.FormEvent) {
@@ -90,21 +76,13 @@ export default function ZooBrowser() {
 
         <div className="flex items-center justify-between bg-white rounded-2xl p-4 card-shadow">
           <span className="font-extrabold text-lg">{view.name} 的動物園</span>
-          <button
-            onClick={toggleDiamond}
-            className={`rounded-full px-4 py-2 font-bold ${
-              view.likedByMe ? "bg-sky-500 text-white" : "bg-sky-50 text-sky-600"
-            }`}
-          >
-            💎 {view.diamondCount}
-          </button>
         </div>
 
         <Zoo
           collection={CREATURES.slice(0, view.unlockedCount)}
           positions={view.zooPositions}
           readOnly
-          title={`🦁 ${view.name} 的動物園`}
+          title={"🦁 $"{view.name} 的動物園"}
         />
 
         <div className="bg-white rounded-2xl p-4 card-shadow space-y-3">
@@ -161,7 +139,7 @@ export default function ZooBrowser() {
             {z.isMe && " (我)"}
           </p>
           <p className="text-xs text-slate-400">
-            🦁 {z.unlockedCount}・💎 {z.diamondCount}
+            🦁 {z.unlockedCount}
           </p>
         </button>
       ))}
