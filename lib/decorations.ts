@@ -1,4 +1,4 @@
-﻿export interface Decoration {
+export interface Decoration {
   id: string;
   name: string;
   emoji: string;
