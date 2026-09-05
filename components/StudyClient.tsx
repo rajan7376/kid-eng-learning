@@ -41,6 +41,9 @@ export default function StudyClient({ classes, weeks }: Props) {
   }, [student.history]);
 
   function switchMode(target: typeof mode) {
+    if (target === "zoo" || target === "visit") {
+      student.refresh?.();
+    }
     if (target === mode) return;
     if (testActive && mode === "test") { if (!confirm("測驗進行中，離開會放棄這次測驗喔！確定離開？")) return; setTestActive(false); }
     setMode(target);
