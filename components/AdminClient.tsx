@@ -1,121 +1,155 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import type { ClassRow, WeekRow, WordCardRow } from "@/lib/types";
 
-interface Props { classes: ClassRow[]; weeks: WeekRow[]; }
-interface AdminUser { id: string; username: string; role: string; display_name: string | null; points: number; unlockedCount: number; feed: number; broom: number; mistakeCount: number; testCount: number; lastTest: string | null; }
-
-async function dataOp(op: string, id?: string, values?: Record<string, unknown>) {
-  await fetch("/api/admin/data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op, id, values }) });
+interface StudentProgressRow {
+  user_id: string;
+  points: number;
+  unlocked_count: number;
+  care: any;
+  updated_at: string;
 }
 
-export default function AdminClient({ classes, weeks }: Props) {
+interface Props {
+  students: StudentProgressRow[];
+}
+
+export default function AdminClient({ students }: Props) {
   const router = useRouter();
-  const supabase = createClient();
-  const [tab, setTab] = useState<"data" | "users" | "shop">("data");
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, { diamonds: number; feed: number; broom: number; points: number }>>({});
+
+  function getVal(s: StudentProgressRow, field: "diamonds" | "feed" | "broom" | "points") {
+    if (editValues[s.user_id]?.[field] !== undefined) {
+      return editValues[s.user_id][field];
+    }
+    if (field === "points") return s.points ?? 0;
+    const care = s.care || {};
+    if (field === "diamonds") return care.diamonds ?? 0;
+    if (field === "feed") return care.feed ?? 3;
+    if (field === "broom") return care.broom ?? 3;
+    return 0;
+  }
+
+  function handleChange(userId: string, field: "diamonds" | "feed" | "broom" | "points", val: number) {
+    const current = editValues[userId] || {
+      diamonds: getVal(students.find(s => s.user_id === userId)!, "diamonds"),
+      feed: getVal(students.find(s => s.user_id === userId)!, "feed"),
+      broom: getVal(students.find(s => s.user_id === userId)!, "broom"),
+      points: getVal(students.find(s => s.user_id === userId)!, "points"),
+    };
+    setEditValues({
+      ...editValues,
+      [userId]: { ...current, [field]: val }
+    });
+  }
+
+  async function handleSave(userId: string) {
+    const vals = editValues[userId];
+    if (!vals) return;
+    setLoadingId(userId);
+
+    try {
+      const res = await fetch("/api/admin/student-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          diamonds: vals.diamonds,
+          feed: vals.feed,
+          broom: vals.broom,
+          points: vals.points
+        })
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert("更新失敗：" + data.error);
+      } else {
+        alert("更新成功！");
+        router.refresh();
+      }
+    } catch (e) {
+      alert("發生錯誤");
+    } finally {
+      setLoadingId(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-extrabold text-brand">管理後台</h1>
-        <div className="flex gap-2">
-          <button onClick={() => setTab("data")} className={`rounded-full px-4 py-1 font-bold text-sm ${tab === "data" ? "bg-brand text-white" : "bg-violet-50 text-brand"}`}>資料管理</button>
-          <button onClick={() => setTab("users")} className={`rounded-full px-4 py-1 font-bold text-sm ${tab === "users" ? "bg-brand text-white" : "bg-violet-50 text-brand"}`}>帳號管理</button>
-          <button onClick={() => setTab("shop")} className={`rounded-full px-4 py-1 font-bold text-sm ${tab === "shop" ? "bg-brand text-white" : "bg-violet-50 text-brand"}`}>商店定價</button>
-          <button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); router.push("/login"); router.refresh(); }} className="rounded-full px-4 py-1 font-bold text-sm bg-slate-100 text-slate-600">登出</button>
-        </div>
+      <h2 className="text-xl font-bold text-slate-700">學生資源與進度管理</h2>
+      <div className="bg-white rounded-2xl p-4 card-shadow overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-slate-100 text-sm text-slate-500">
+              <th className="p-3">學生編號 (ID)</th>
+              <th className="p-3">學習點數</th>
+              <th className="p-3">💎 鑽石</th>
+              <th className="p-3">🥕 飼料</th>
+              <th className="p-3">🧹 掃把</th>
+              <th className="p-3">操作</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50 text-sm">
+            {students.map((s) => {
+              const userId = s.user_id;
+              const isSaving = loadingId === userId;
+              return (
+                <tr key={userId} className="hover:bg-violet-50/50">
+                  <td className="p-3 font-mono text-xs text-slate-500">{userId.substring(0, 12)}...</td>
+                  <td className="p-3">
+                    <input
+                      type="number"
+                      value={getVal(s, "points")}
+                      onChange={(e) => handleChange(userId, "points", Number(e.target.value))}
+                      className="w-20 rounded border border-slate-200 px-2 py-1 text-center"
+                    />
+                  </td>
+                  <td className="p-3">
+                    <input
+                      type="number"
+                      value={getVal(s, "diamonds")}
+                      onChange={(e) => handleChange(userId, "diamonds", Number(e.target.value))}
+                      className="w-20 rounded border border-slate-200 px-2 py-1 text-center font-bold text-violet-600"
+                    />
+                  </td>
+                  <td className="p-3">
+                    <input
+                      type="number"
+                      value={getVal(s, "feed")}
+                      onChange={(e) => handleChange(userId, "feed", Number(e.target.value))}
+                      className="w-20 rounded border border-slate-200 px-2 py-1 text-center"
+                    />
+                  </td>
+                  <td className="p-3">
+                    <input
+                      type="number"
+                      value={getVal(s, "broom")}
+                      onChange={(e) => handleChange(userId, "broom", Number(e.target.value))}
+                      className="w-20 rounded border border-slate-200 px-2 py-1 text-center"
+                    />
+                  </td>
+                  <td className="p-3">
+                    <button
+                      onClick={() => handleSave(userId)}
+                      disabled={isSaving}
+                      className="rounded-lg bg-brand text-white px-4 py-1.5 font-bold text-xs disabled:opacity-50"
+                    >
+                      {isSaving ? "儲存中..." : "儲存"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {students.length === 0 && (
+              <tr>
+                <td colSpan={6} className="p-6 text-center text-slate-400">目前沒有學生進度資料。</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
-      {tab === "data" ? <DataPanel supabase={supabase} classes={classes} weeks={weeks} /> : tab === "users" ? <UsersPanel /> : <ShopPanel />}
-    </div>
-  );
-}
-
-function ShopPanel() {
-  const [items, setItems] = useState<{id:string, name:string, emoji:string, price:number}[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<Record<string, number>>({});
-
-  async function load() {
-    setLoading(true);
-    const res = await fetch("/api/admin/shop");
-    const data = await res.json();
-    setItems(data.items ?? []);
-    setLoading(false);
-  }
-  useEffect(() => { void load(); }, []);
-
-  async function save(id: string) {
-    if (editing[id] === undefined) return;
-    await fetch("/api/admin/shop", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, price: editing[id] }) });
-    const next = { ...editing }; delete next[id]; setEditing(next);
-    void load();
-  }
-
-  return (
-    <div className="bg-white rounded-2xl p-6 card-shadow">
-      <h2 className="font-bold text-lg mb-4">商店裝飾品定價設定</h2>
-      {loading ? <p className="text-slate-400">載入中…</p> : items.length === 0 ? <p className="text-slate-400">尚未在資料庫建立裝飾品資料。</p> : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {items.map(item => (
-            <div key={item.id} className="flex flex-col items-center p-4 rounded-xl bg-violet-50 border border-violet-100 relative group">
-              <span className="text-4xl">{item.emoji}</span>
-              <span className="font-bold mt-2">{item.name}</span>
-              <div className="mt-3 flex items-center gap-2">
-                <span className="text-sm font-bold text-brand">💎</span>
-                <input type="number" min="0" value={editing[item.id] !== undefined ? editing[item.id] : item.price} onChange={e => setEditing({...editing, [item.id]: parseInt(e.target.value) || 0})} className="w-16 rounded border border-slate-200 px-2 py-1 text-center font-bold text-slate-700" />
-              </div>
-              {editing[item.id] !== undefined && editing[item.id] !== item.price && (
-                <button onClick={() => save(item.id)} className="mt-3 text-xs bg-brand text-white px-4 py-1.5 rounded-full font-bold">儲存價格</button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// === 原有 DataPanel, CardEditor, UsersPanel 完整保留 (精簡呈現避免超字) ===
-function DataPanel({ supabase, classes, weeks }: any) {
-  const router = useRouter(); const [files, setFiles] = useState<File[]>([]); const [busy, setBusy] = useState(false); const [log, setLog] = useState<string[]>([]); const [openWeek, setOpenWeek] = useState<string | null>(null); const [cards, setCards] = useState<WordCardRow[]>([]); const [editingClassId, setEditingClassId] = useState<string | null>(null); const [classEditForm, setClassEditForm] = useState({ code: "", name: "" }); const [editingWeekId, setEditingWeekId] = useState<string | null>(null); const [weekEditForm, setWeekEditForm] = useState({ week_label: "", date_range: "" });
-  async function upload(e: React.FormEvent) { e.preventDefault(); if (files.length === 0) return; setBusy(true); setLog([]); for (let i = 0; i < files.length; i++) { const f = files[i]; setLog((l) => [...l, `(${i + 1}/${files.length}) ${f.name}：分析中…`]); try { const fd = new FormData(); fd.append("file", f); const res = await fetch("/api/analyze", { method: "POST", body: fd }); const json = await res.json(); if (!res.ok) throw new Error(json.error || "分析失敗"); setLog((l) => [ ...l.slice(0, -1), `(${i + 1}/${files.length}) ${f.name}：✅ ${json.handout.class_code}・${json.handout.week_label}，${json.handout.cards.length} 張卡片`, ]); } catch (err) { setLog((l) => [ ...l.slice(0, -1), `(${i + 1}/${files.length}) ${f.name}：❌ ${err instanceof Error ? err.message : "發生錯誤"}`, ]); } } setBusy(false); setFiles([]); router.refresh(); }
-  async function loadCards(weekId: string) { if (openWeek === weekId) { setOpenWeek(null); return; } setOpenWeek(weekId); const { data } = await supabase.from("word_cards").select("*").eq("week_id", weekId).order("sort_order", { ascending: true }); setCards((data ?? []) as WordCardRow[]); }
-  function startEditClass(c: ClassRow) { setEditingClassId(c.id); setClassEditForm({ code: c.code, name: c.name ?? "" }); }
-  async function saveClass(id: string) { if (!classEditForm.code.trim()) { alert("班級代碼不能為空"); return; } await dataOp("updateClass", id, { code: classEditForm.code.trim(), name: classEditForm.name.trim() || null, }); setEditingClassId(null); router.refresh(); }
-  function startEditWeek(w: WeekRow, e: React.MouseEvent) { e.stopPropagation(); setEditingWeekId(w.id); setWeekEditForm({ week_label: w.week_label, date_range: w.date_range ?? "", }); }
-  async function saveWeek(id: string) { if (!weekEditForm.week_label.trim()) { alert("週次名稱不能為空"); return; } await dataOp("updateWeek", id, { week_label: weekEditForm.week_label.trim(), date_range: weekEditForm.date_range.trim() || null, }); setEditingWeekId(null); router.refresh(); }
-  return (
-    <div className="space-y-6">
-      <form onSubmit={upload} className="bg-white rounded-2xl p-6 card-shadow space-y-3"><h2 className="font-bold text-lg">上傳講義</h2><p className="text-sm text-slate-500">支援 JPG / PNG / PDF / WORD，可一次選多個檔案，AI 逐一分析建立班級/週次/單字。</p><input type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx" onChange={(e) => setFiles(Array.from(e.target.files ?? []))} className="block w-full text-sm" />{files.length > 0 && ( <p className="text-xs text-slate-400">已選 {files.length} 個檔案</p> )}<button type="submit" disabled={files.length === 0 || busy} className="rounded-full bg-brand text-white px-6 py-2 font-bold disabled:opacity-50">{busy ? "分析中…" : `上傳並分析${files.length > 1 ? ` (${files.length})` : ""}`}</button>{log.length > 0 && ( <ul className="text-sm text-slate-600 space-y-1">{log.map((line, i) => ( <li key={i}>{line}</li> ))}</ul> )}</form>
-      <div className="bg-white rounded-2xl p-6 card-shadow space-y-4"><h2 className="font-bold text-lg">班級 / 週次 / 單字</h2>{classes.length === 0 && ( <p className="text-sm text-slate-400">尚無資料，先上傳一份講義。</p> )}{classes.map((c: any) => ( <div key={c.id} className="border border-slate-100 rounded-xl p-3"><div className="flex items-center justify-between gap-2 flex-wrap">{editingClassId === c.id ? ( <div className="flex items-center gap-2"><input value={classEditForm.code} placeholder="代碼 (例: 3A)" onChange={(e) => setClassEditForm({ ...classEditForm, code: e.target.value }) } className="rounded border border-slate-200 px-2 py-1 text-sm w-24 font-bold" /><input value={classEditForm.name} placeholder="名稱 (選填)" onChange={(e) => setClassEditForm({ ...classEditForm, name: e.target.value }) } className="rounded border border-slate-200 px-2 py-1 text-sm w-32" /><button onClick={() => saveClass(c.id)} className="rounded bg-brand text-white px-3 py-1 text-xs font-bold">儲存</button><button onClick={() => setEditingClassId(null)} className="text-xs text-slate-500 hover:underline">取消</button></div> ) : ( <div className="flex items-center gap-2"><span className="font-bold text-brand">{c.code}</span>{c.name && ( <span className="text-xs text-slate-500">（{c.name}）</span> )}<button onClick={() => startEditClass(c)} className="text-xs text-slate-400 hover:text-brand underline">編輯班名</button></div> )}<button onClick={async () => { if (!confirm(`刪除班級 ${c.code} 及其所有週次/單字？`)) return; await dataOp("deleteClass", c.id); router.refresh(); }} className="text-xs text-rose-400 hover:underline">刪除班級</button></div><div className="mt-2 space-y-2">{weeks.filter((w: any) => w.class_id === c.id).map((w: any) => ( <div key={w.id} className="rounded-lg bg-violet-50 p-2"><div className="flex items-center justify-between gap-2 flex-wrap">{editingWeekId === w.id ? ( <div className="flex items-center gap-2 flex-wrap"><input value={weekEditForm.week_label} placeholder="週次 (例: W1)" onChange={(e) => setWeekEditForm({ ...weekEditForm, week_label: e.target.value }) } className="rounded border border-slate-200 px-2 py-1 text-sm w-28 font-bold" /><input value={weekEditForm.date_range} placeholder="日期 (例: 08/31-09/04)" onChange={(e) => setWeekEditForm({ ...weekEditForm, date_range: e.target.value }) } className="rounded border border-slate-200 px-2 py-1 text-sm w-44" /><button onClick={() => saveWeek(w.id)} className="rounded bg-brand text-white px-3 py-1 text-xs font-bold">儲存</button><button onClick={() => setEditingWeekId(null)} className="text-xs text-slate-500 hover:underline">取消</button></div> ) : ( <div className="flex items-center gap-2"><button onClick={() => loadCards(w.id)} className="font-bold text-slate-700 hover:text-brand">{w.week_label}{w.date_range ? ` (${w.date_range})` : ""} {openWeek === w.id ? "▲" : "▼"}</button><button onClick={(e) => startEditWeek(w, e)} className="text-xs text-slate-400 hover:text-brand underline">編輯日期/週次</button></div> )}<button onClick={async () => { if (!confirm("刪除此週次及其單字？")) return; await dataOp("deleteWeek", w.id); if (openWeek === w.id) setOpenWeek(null); router.refresh(); }} className="text-xs text-rose-400 hover:underline">刪除週次</button></div>{openWeek === w.id && ( <div className="mt-2 space-y-2">{cards.map((card) => ( <CardEditor key={card.id} card={card} onDeleted={() => setCards((cs) => cs.filter((x) => x.id !== card.id)) } /> ))}{cards.length === 0 && ( <p className="text-xs text-slate-400">此週次沒有單字。</p> )}</div>)}</div> ))}</div></div> ))}</div>
-    </div>
-  );
-}
-
-function CardEditor({ card, onDeleted }: any) {
-  const [v, setV] = useState({ english_word: card.english_word, part_of_speech: card.part_of_speech ?? "", word_meaning_zh: card.word_meaning_zh ?? "", sentence: card.sentence ?? "", sentence_zh: card.sentence_zh ?? "", }); const [saved, setSaved] = useState(false);
-  const field = (k: keyof typeof v, ph: string) => ( <input value={v[k]} placeholder={ph} onChange={(e) => { setV({ ...v, [k]: e.target.value }); setSaved(false); }} className="rounded border border-slate-200 px-2 py-1 text-sm" /> );
-  return ( <div className="bg-white rounded-lg p-2 flex flex-wrap items-center gap-2">{field("english_word", "單字")}{field("part_of_speech", "詞性")}{field("word_meaning_zh", "詞義")}{field("sentence", "例句")}{field("sentence_zh", "翻譯")}<button onClick={async () => { await dataOp("updateCard", card.id, v); setSaved(true); }} className="rounded-full bg-brand text-white px-3 py-1 text-xs font-bold">{saved ? "已存✓" : "儲存"}</button><button onClick={async () => { if (!confirm("刪除這個單字？")) return; await dataOp("deleteCard", card.id); onDeleted(); }} className="text-xs text-rose-400 hover:underline">刪除</button></div> );
-}
-
-function UsersPanel() {
-  const [users, setUsers] = useState<AdminUser[]>([]); const [loading, setLoading] = useState(true); const [form, setForm] = useState({ username: "", password: "", role: "student", display_name: "", }); const [msg, setMsg] = useState<string | null>(null);
-  async function load() { setLoading(true); const res = await fetch("/api/admin/users"); const data = await res.json(); setUsers(data.users ?? []); setLoading(false); } useEffect(() => { void load(); }, []);
-  async function create(e: React.FormEvent) { e.preventDefault(); setMsg(null); const res = await fetch("/api/admin/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form), }); const data = await res.json(); if (!res.ok) { setMsg(data.error || "建立失敗"); return; } setForm({ username: "", password: "", role: "student", display_name: "" }); void load(); }
-  async function changeRole(u: AdminUser, newRole: string) { if (u.role === newRole) return; const res = await fetch("/api/admin/users", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: u.id, role: newRole }), }); const data = await res.json(); if (!res.ok) { alert(data.error || "更新角色失敗"); return; } void load(); }
-  async function resetPw(u: AdminUser) { const pw = prompt(`為「${u.username}」設定新密碼：`); if (!pw) return; await fetch("/api/admin/users", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: u.id, password: pw }), }); alert("已更新密碼"); }
-  async function remove(u: AdminUser) { if (!confirm(`刪除帳號 ${u.username}？其學習紀錄也會一併刪除。`)) return; await fetch(`/api/admin/users?id=${u.id}`, { method: "DELETE" }); void load(); }
-  async function editProgress(u: AdminUser) { const pStr = prompt(`設定「${u.username}」的點數：`, String(u.points)); if (pStr === null) return; const points = parseInt(pStr, 10); if (Number.isNaN(points)) return; const uStr = prompt(`設定解鎖動物數(0~∞，留空=依點數自動 ${Math.floor(points / 5)})：`, ""); const body: Record<string, unknown> = { op: "setProgress", userId: u.id, points }; if (uStr && uStr.trim() !== "") body.unlockedCount = parseInt(uStr, 10); await fetch("/api/admin/student", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), }); void load(); }
-  async function editTestCount(u: AdminUser) { const s = prompt(`設定「${u.username}」的測驗次數：`, String(u.testCount)); if (s === null) return; const count = parseInt(s, 10); if (Number.isNaN(count)) return; await fetch("/api/admin/student", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "setTestCount", userId: u.id, count }), }); void load(); }
-  async function editItems(u: AdminUser) { const fStr = prompt(`設定「${u.username}」的飼料 🥕 數量：`, String(u.feed)); if (fStr === null) return; const bStr = prompt(`設定「${u.username}」的掃把 🧹 數量：`, String(u.broom)); if (bStr === null) return; const body: Record<string, unknown> = { op: "setItems", userId: u.id }; if (fStr.trim() !== "") body.feed = parseInt(fStr, 10); if (bStr.trim() !== "") body.broom = parseInt(bStr, 10); await fetch("/api/admin/student", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), }); void load(); }
-  async function clearMistakes(u: AdminUser) { if (!confirm(`清空「${u.username}」的所有錯字記錄？`)) return; await fetch("/api/admin/student", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "clearMistakes", userId: u.id }), }); void load(); }
-  return (
-    <div className="space-y-6">
-      <form onSubmit={create} className="bg-white rounded-2xl p-6 card-shadow space-y-3"><h2 className="font-bold text-lg">新增帳號</h2><div className="flex flex-wrap gap-2"><input required placeholder="帳號" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="rounded border border-slate-200 px-3 py-2" /><input required placeholder="密碼" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="rounded border border-slate-200 px-3 py-2" /><input placeholder="顯示名稱(選填)" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} className="rounded border border-slate-200 px-3 py-2" /><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="rounded border border-slate-200 px-3 py-2"><option value="student">學生</option><option value="parent">家長</option><option value="admin">管理員</option></select><button type="submit" className="rounded-full bg-brand text-white px-6 py-2 font-bold">建立</button></div>{msg && <p className="text-sm text-rose-500">{msg}</p>}</form>
-      <div className="bg-white rounded-2xl p-6 card-shadow"><h2 className="font-bold text-lg mb-3">帳號清單</h2>{loading ? ( <p className="text-slate-400">載入中…</p> ) : ( <div className="overflow-auto"><table className="w-full text-sm"><thead className="text-left text-slate-400"><tr><th className="py-1">帳號</th><th>角色</th><th>點數</th><th>解鎖</th><th>🥕</th><th>🧹</th><th>錯字</th><th>測驗次數</th><th>操作</th></tr></thead><tbody>{users.map((u) => ( <tr key={u.id} className="border-t border-slate-100"><td className="py-2 font-semibold">{u.username}{u.display_name ? `（${u.display_name}）` : ""}</td><td><select value={u.role} onChange={(e) => changeRole(u, e.target.value)} className="rounded border border-slate-200 px-2 py-0.5 text-xs bg-white"><option value="student">學生</option><option value="parent">家長</option><option value="admin">管理員</option></select></td><td>{u.role === "student" ? u.points : "—"}</td><td>{u.role === "student" ? u.unlockedCount : "—"}</td><td>{u.role === "student" ? u.feed : "—"}</td><td>{u.role === "student" ? u.broom : "—"}</td><td>{u.role === "student" ? u.mistakeCount : "—"}</td><td>{u.role === "student" ? u.testCount : "—"}</td><td className="space-x-2 whitespace-nowrap">{u.role === "student" && ( <><button onClick={() => editProgress(u)} className="text-emerald-500 hover:underline">改進度</button><button onClick={() => editTestCount(u)} className="text-sky-500 hover:underline">改次數</button><button onClick={() => editItems(u)} className="text-orange-500 hover:underline">改道具</button><button onClick={() => clearMistakes(u)} className="text-amber-500 hover:underline">清錯字</button></> )}<button onClick={() => resetPw(u)} className="text-brand hover:underline">改密碼</button><button onClick={() => remove(u)} className="text-rose-400 hover:underline">刪除</button></td></tr> ))}</tbody></table></div> )}</div>
     </div>
   );
 }
