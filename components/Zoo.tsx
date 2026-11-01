@@ -22,7 +22,6 @@ const MOOD: Record<CareView["hungerStage"], string> = {
   away: "🏃",
 };
 
-// 改用相對百分比 (rx, ry)，確保手機與平板畫面切換時大便不會超出邊界
 const POOP_SPOTS = [
   { rx: 0.12, ry: 0.62 }, { rx: 0.32, ry: 0.72 }, { rx: 0.55, ry: 0.64 },
   { rx: 0.78, ry: 0.74 }, { rx: 0.20, ry: 0.84 }, { rx: 0.45, ry: 0.86 },
@@ -30,7 +29,6 @@ const POOP_SPOTS = [
   { rx: 0.85, ry: 0.62 },
 ];
 
-// 預設單字庫（若父元件未傳入 words 時使用，確保每隻動物有不同單字）
 const DEFAULT_WORDS = [
   "apple", "brave", "castle", "dream", "eraser",
   "friend", "garden", "happy", "island", "jewel",
@@ -46,7 +44,7 @@ export default function Zoo({
   onSave,
   readOnly = false,
   title = "🦁 我的動物園",
-  care,
+  care: propCare,
   diamonds: propDiamonds = 0,
   inventory = {},
   words,
@@ -76,6 +74,10 @@ export default function Zoo({
   const drag = useRef<{ id: string; dx: number; dy: number; moved: boolean } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
+  const [localCare, setLocalCare] = useState<CareView | null>(propCare ?? null);
+  useEffect(() => { setLocalCare(propCare ?? null); }, [propCare]);
+  const care = localCare;
+
   const [msg, setMsg] = useState("");
   const [shopOpen, setShopOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -86,8 +88,8 @@ export default function Zoo({
   const [activePetId, setActivePetId] = useState<string | null>(null);
   const [petWords, setPetWords] = useState<Record<string, string>>({});
   const [treasure, setTreasure] = useState<{ rx: number; ry: number; found: boolean } | null>(null);
+  const [rewardModal, setRewardModal] = useState<{ name: string; emoji: string; count: number } | null>(null);
 
-  // 1. 監聽手機/平板螢幕尺寸與旋轉變化，動態更新畫布邊界
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -107,11 +109,9 @@ export default function Zoo({
     };
   }, []);
 
-  // 2. 每次開啟動物園時，為每隻動物分配不重複的隨機英文單字（單字不夠則不顯示）
   useEffect(() => {
     const rawPool = words && words.length > 0 ? words : DEFAULT_WORDS;
     const uniquePool = Array.from(new Set(rawPool.map((w) => w.trim()).filter(Boolean)));
-    // 洗牌
     for (let i = uniquePool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [uniquePool[i], uniquePool[j]] = [uniquePool[j], uniquePool[i]];
@@ -125,16 +125,14 @@ export default function Zoo({
     setPetWords(assigned);
   }, [collection.length, words]);
 
-  // 3. 動物自行在草地上緩慢移動（每 3.5 秒更新一次漫步偏移量）
   useEffect(() => {
     if (collection.length === 0) return;
     const timer = setInterval(() => {
-      if (drag.current) return; // 拖曳中暫停更新
+      if (drag.current) return;
       setRoamOffsets((prev) => {
         const next: Record<string, Pos> = { ...prev };
         collection.forEach((_, idx) => {
           const id = String(idx);
-          // 每次約 65% 機率移動到附近草地座標
           if (Math.random() < 0.65) {
             const cur = prev[id] ?? { x: 0, y: 0 };
             const nx = Math.max(-45, Math.min(45, cur.x + (Math.random() - 0.5) * 50));
@@ -168,14 +166,12 @@ export default function Zoo({
   const currentDiamonds = Math.max((care as any)?.diamonds ?? 0, propDiamonds ?? 0, (care as any)?.diamond ?? 0);
   const showCare = !!care && !readOnly && collection.length > 0;
 
-  // 隨機寶箱採用相對比例位置，適應手機螢幕
   useEffect(() => {
-    if (!readOnly && collection.length > 0 && Math.random() > 0.3) {
+    if (!readOnly && collection.length > 0 && Math.random() > 0.25) {
       setTreasure({ rx: 0.15 + Math.random() * 0.7, ry: 0.56 + Math.random() * 0.28, found: false });
     }
   }, [collection.length, readOnly]);
 
-  // 點擊動物：顯示該動物的姓名（4 秒後自動切回英文單字）
   function handleAnimalClick(id: string) {
     setActivePetId((prev) => (prev === id ? null : id));
   }
@@ -186,9 +182,21 @@ export default function Zoo({
     return () => clearTimeout(t);
   }, [activePetId]);
 
-  function handleFindTreasure() {
+  async function handleFindTreasure() {
     setTreasure((prev) => (prev ? { ...prev, found: true } : null));
-    setMsg("🎉 發現隱藏寶箱！獲得額外驚喜！");
+    try {
+      const res = await fetch("/api/student/claim-treasure", { method: "POST" });
+      const d = await res.json();
+      if (d.ok && d.reward) {
+        setRewardModal(d.reward);
+        if (d.care) setLocalCare(d.care);
+        setMsg(`🎉 恭喜獲得 ${d.reward.emoji} ${d.reward.name} x${d.reward.count}！`);
+      } else {
+        setMsg("🎉 寶箱打開了，但什麼也沒有！");
+      }
+    } catch (e) {
+      setMsg("🎉 寶箱打開了！");
+    }
   }
 
   async function handleSaveName() {
@@ -234,7 +242,6 @@ export default function Zoo({
 
   useEffect(() => { setPos(positions); }, [positions]);
 
-  // 依據目前螢幕寬度自適應計算預設位置（手機每排 4~5 隻，平板自動展開）
   function defaultPos(i: number): Pos {
     const cols = Math.max(3, Math.floor((bounds.w - 24) / 68));
     const col = i % cols;
@@ -245,10 +252,9 @@ export default function Zoo({
     return clamp({ x, y });
   }
 
-  // 強制將座標鎖在目前裝置的可視畫布範圍內（預留頂部氣泡與左右邊距）
   function clamp(p: Pos, isAnimal = false): Pos {
     const padX = 12;
-    const minY = isAnimal ? 195 : 36; // 動物維持在草地區域，並預留頭頂單字氣泡高度
+    const minY = isAnimal ? 195 : 36;
     const maxX = Math.max(padX, bounds.w - TOKEN - padX);
     const maxY = Math.max(minY, bounds.h - TOKEN - 10);
     return {
@@ -262,7 +268,6 @@ export default function Zoo({
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    // 開始拖曳時歸零該動物的漫步偏移，避免座標跳動
     setRoamOffsets((prev) => ({ ...prev, [dragId]: { x: 0, y: 0 } }));
     setPos((prev) => ({ ...prev, [dragId]: currentVisualPos }));
     drag.current = {
@@ -299,6 +304,31 @@ export default function Zoo({
 
   return (
     <div className="space-y-2 relative">
+      {/* 寶箱開箱驚喜彈窗 */}
+      {rewardModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/45 rounded-2xl p-4">
+          <div className="bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center max-w-[280px] w-full text-center space-y-3 border-2 border-amber-300 animate-in zoom-in-95 duration-200">
+            <span className="text-5xl animate-bounce">🎁</span>
+            <h3 className="font-extrabold text-amber-700 text-lg">神秘寶物被發現了！</h3>
+            <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 w-full flex items-center justify-center gap-2">
+              <span className="text-4xl">{rewardModal.emoji}</span>
+              <div className="text-left">
+                <p className="font-extrabold text-slate-700 text-sm">{rewardModal.name}</p>
+                <p className="text-xs text-amber-600 font-bold">獲得數量 +{rewardModal.count}</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 font-bold">道具已自動收入你的背包囉！</p>
+            <button
+              type="button"
+              onClick={() => setRewardModal(null)}
+              className="w-full py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl font-extrabold text-sm shadow-md transition-all"
+            >
+              太棒了！收下獎勵 ✨
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 玩法說明 Modal */}
       {helpOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 rounded-2xl p-4">
@@ -331,8 +361,8 @@ export default function Zoo({
               </div>
 
               <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
-                <p className="text-emerald-800 font-extrabold mb-1">🐾 自由散步與拖曳</p>
-                <p>動物們會在草地上自己散步走動，你也可以隨時用手指按住牠們，拖曳到喜歡的位置！</p>
+                <p className="text-emerald-800 font-extrabold mb-1">🎁 草地隨機寶箱</p>
+                <p>草地上偶爾會出現跳動的小寶箱，點擊它有機會獲得隨機 1~2 根胡蘿蔔或掃把！</p>
               </div>
             </div>
 
@@ -382,7 +412,7 @@ export default function Zoo({
         </div>
       )}
 
-      {/* 頂部功能列（支援手機窄螢幕自動換行） */}
+      {/* 頂部功能列 */}
       {!readOnly && (
         <div className="flex flex-wrap justify-between items-center gap-2 bg-white rounded-2xl p-3 card-shadow">
           <p className="text-xs sm:text-sm text-slate-500 font-bold">點動物看名字，也可拖曳佈置喔！🐾</p>
@@ -455,7 +485,7 @@ export default function Zoo({
         </div>
       )}
 
-      {/* 動物園畫布（RWD 自適應高度與寬度防溢出） */}
+      {/* 動物園畫布 */}
       <div
         ref={ref}
         onPointerMove={onPointerMove}
@@ -483,11 +513,12 @@ export default function Zoo({
           </div>
         )}
 
-        {/* 尋寶彩蛋（依畫面比例安全定位） */}
+        {/* 尋寶彩蛋 */}
         {!readOnly && !away && treasure && !treasure.found && (
           <button
+            type="button"
             onClick={handleFindTreasure}
-            className="absolute text-3xl sm:text-4xl animate-bounce drop-shadow-md z-10"
+            className="absolute text-3xl sm:text-4xl animate-bounce drop-shadow-md z-10 hover:scale-125 transition-transform"
             style={{
               left: Math.round(treasure.rx * (bounds.w - 48)),
               top: Math.round(treasure.ry * (bounds.h - 48)),
@@ -497,7 +528,7 @@ export default function Zoo({
           </button>
         )}
 
-        {/* 大便顯示（依畫面比例安全定位） */}
+        {/* 大便顯示 */}
         {!readOnly && care && !away && livePoop > 0 && collection.length > 0 && (
           <div className="pointer-events-none absolute inset-0 text-2xl z-10">
             {POOP_SPOTS.slice(0, Math.min(livePoop, POOP_SPOTS.length)).map((s, i) => (
@@ -524,7 +555,7 @@ export default function Zoo({
           </div>
         )}
 
-        {/* 裝飾品（自動限制在手機/平板畫布內） */}
+        {/* 裝飾品 */}
         {placedDecos.map((key) => {
           const baseId = key.split("_")[1];
           const deco = DECORATIONS.find((d) => d.id === baseId);
@@ -544,7 +575,7 @@ export default function Zoo({
           );
         })}
 
-        {/* 動物列表：常駐隨機英文單字、點擊顯示姓名、自主漫步移動、RWD 邊界保護 */}
+        {/* 動物列表 */}
         {!away && collection.map((c, i) => {
           const dragId = String(i);
           const baseP = pos[dragId] ?? defaultPos(i);
@@ -567,7 +598,6 @@ export default function Zoo({
                 transition: draggingId === dragId ? "none" : "left 3s ease-in-out, top 3s ease-in-out",
               }}
             >
-              {/* 頂部泡泡：點擊時顯示「姓名 + 改名按鈕」；平時顯示「隨機英文單字（若單字足夠）」 */}
               {isShowingName ? (
                 <div className="absolute -top-8 bg-amber-50 border-2 border-amber-400 text-amber-900 font-extrabold text-xs px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-md flex items-center gap-1 z-30 animate-bounce">
                   <span>🏷️ {petName}</span>
