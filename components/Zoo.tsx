@@ -63,6 +63,7 @@ export default function Zoo({
   const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
   const [msg, setMsg] = useState("");
   const [shopOpen, setShopOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [buying, setBuying] = useState(false);
 
   const [naming, setNaming] = useState<{ id: string; name: string } | null>(null);
@@ -196,6 +197,59 @@ export default function Zoo({
 
   return (
     <div className="space-y-2 relative">
+      {/* 玩法說明 Modal */}
+      {helpOpen && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 rounded-2xl p-4">
+          <div className="bg-white p-5 rounded-2xl shadow-2xl max-w-sm w-full space-y-3 max-h-[92%] overflow-y-auto border-2 border-brand/20">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="font-extrabold text-brand text-base flex items-center gap-1">📖 動物園照顧手冊</h3>
+              <button
+                type="button"
+                onClick={() => setHelpOpen(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-lg px-2"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs text-slate-600 font-bold leading-relaxed">
+              <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-100">
+                <p className="text-amber-800 font-extrabold mb-1">🥕 每日餵食</p>
+                <p>每天別忘了餵動物吃胡蘿蔔！如果太久沒餵，動物肚子太餓會不開心喔。</p>
+              </div>
+
+              <div className="bg-sky-50 p-2.5 rounded-xl border border-sky-100">
+                <p className="text-sky-800 font-extrabold mb-1">🧹 環境打掃</p>
+                <p>草地每隔一段時間會出現 💩，記得使用掃把清乾淨，保持動物園整潔！</p>
+              </div>
+
+              <div className="bg-rose-50 p-2.5 rounded-xl border border-rose-100">
+                <p className="text-rose-800 font-extrabold mb-1">🏃 動物離家出走了怎麼辦？</p>
+                <p>如果動物太餓或環境太髒離家出走了，只要在<strong>「同一天完成餵食＋打掃」</strong>，動物就會立刻開心回家！</p>
+              </div>
+
+              <div className="bg-purple-50 p-2.5 rounded-xl border border-purple-100">
+                <p className="text-purple-800 font-extrabold mb-1">✏️ 取名字與互動</p>
+                <p>點擊動物會說英文，點泡泡旁的 ✏️ 可以為牠取專屬名字，讓牠成為你最特別的夥伴！</p>
+              </div>
+
+              <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+                <p className="text-emerald-800 font-extrabold mb-1">🎁 尋找草地寶箱</p>
+                <p>草地上偶爾會出現跳動的小寶箱，找到並點擊它會有驚喜喔！</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setHelpOpen(false)}
+              className="w-full py-2 bg-brand text-white rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+            >
+              我知道了！
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 專屬命名卡片 Modal */}
       {naming && !readOnly && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 rounded-2xl">
@@ -237,6 +291,7 @@ export default function Zoo({
           <p className="text-sm text-slate-500 font-bold">拖曳動物或裝飾品佈置動物園吧！🐾</p>
           <div className="flex gap-2">
             <div className="bg-sky-100 text-brand px-3 py-1.5 rounded-full font-bold text-sm flex items-center gap-1">💎 {currentDiamonds}</div>
+            <button onClick={() => setHelpOpen(true)} className="bg-amber-100 text-amber-800 hover:bg-amber-200 px-3 py-1.5 rounded-full font-bold text-sm hover:scale-105 transition-transform">📖 說明</button>
             <button onClick={() => setShopOpen(!shopOpen)} className="bg-brand text-white px-4 py-1.5 rounded-full font-bold text-sm hover:scale-105 transition-transform">🛒 商店</button>
           </div>
         </div>
