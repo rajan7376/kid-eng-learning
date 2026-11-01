@@ -52,7 +52,20 @@ function fillMatches(input: string, answer: string): boolean {
   return cleanIn === cleanAns || parts.includes(cleanIn);
 }
 
-  function isQuestionCorrect(q: Question, r: Response): boolean {
+  export interface Question {
+  isPhrase: boolean;
+  choiceAnswer: string;
+  fillAnswer: string;
+  [key: string]: any;
+}
+
+export interface Response {
+  choice: string | null;
+  fill: string;
+  [key: string]: any;
+}
+
+function isQuestionCorrect(q: Question, r: Response): boolean {
   if (q.isPhrase) return r.choice === q.choiceAnswer;
   return r.choice === q.choiceAnswer && fillMatches(r.fill, q.fillAnswer);
 }
