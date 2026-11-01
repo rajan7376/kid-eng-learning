@@ -32,8 +32,18 @@ const POOP_SPOTS = [
 interface Pos { x: number; y: number; }
 
 export default function Zoo({
-  collection, positions, onSave, readOnly = false, title = "🦁 我的動物園",
-  care, diamonds: propDiamonds = 0, inventory = {}, onBuyDecoration, onFeed, onClean,
+  collection,
+  positions,
+  onSave,
+  readOnly = false,
+  title = "🦁 我的動物園",
+  care,
+  diamonds: propDiamonds = 0,
+  inventory = {},
+  onBuyDecoration,
+  onFeed,
+  onClean,
+  onRenamePet,
 }: {
   collection: Creature[];
   positions: ZooPositions;
@@ -46,6 +56,7 @@ export default function Zoo({
   onBuyDecoration?: (itemId: string) => Promise<{ ok: boolean; error?: string }>;
   onFeed?: () => Promise<{ ok: boolean; error?: string }>;
   onClean?: () => Promise<{ ok: boolean; error?: string }>;
+  onRenamePet?: (petId: string, name: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<ZooPositions>(positions);
@@ -54,11 +65,17 @@ export default function Zoo({
   const [shopOpen, setShopOpen] = useState(false);
   const [buying, setBuying] = useState(false);
 
+  const [naming, setNaming] = useState<{ id: string; name: string } | null>(null);
+  const [localNames, setLocalNames] = useState<Record<string, string>>({});
+  const [speech, setSpeech] = useState<{ id: string; text: string } | null>(null);
+  const [treasure, setTreasure] = useState<{ x: number; y: number; found: boolean } | null>(null);
+
   const [nowTs, setNowTs] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNowTs(Date.now()), 5000);
     return () => clearInterval(t);
   }, []);
+
   const livePoop =
     care && care.lastCleaned
       ? Math.max(0, Math.floor((nowTs - new Date(care.lastCleaned).getTime()) / (POOP_HOURS * 3_600_000)))
@@ -72,6 +89,46 @@ export default function Zoo({
   const away = !!care && (care.hungerStage === "away" || liveMess === "away");
   const currentDiamonds = Math.max((care as any)?.diamonds ?? 0, propDiamonds ?? 0, (care as any)?.diamond ?? 0);
   const showCare = !!care && !readOnly && collection.length > 0;
+
+  useEffect(() => {
+    if (!readOnly && collection.length > 0 && Math.random() > 0.3) {
+      setTreasure({ x: 50 + Math.random() * 400, y: 100 + Math.random() * 200, found: false });
+    }
+  }, [collection.length, readOnly]);
+
+  function handleAnimalClick(id: string, c: Creature) {
+    if (readOnly) return;
+    const petName = localNames[id] || (care as any)?.petsInfo?.[id]?.name || c.name;
+    const intimacy = (care as any)?.petsInfo?.[id]?.intimacy || 0;
+    const greetings = ["Hello!", "Good job!", "Keep going!", "I love you!", "Awesome!", petName + "!"];
+    const text = greetings[Math.floor(Math.random() * greetings.length)];
+    setSpeech({ id, text: text + (intimacy > 0 ? " 💖".repeat(Math.min(3, Math.floor(intimacy / 5))) : "") });
+    setTimeout(() => setSpeech(null), 3000);
+  }
+
+  function handleFindTreasure() {
+    setTreasure((prev) => (prev ? { ...prev, found: true } : null));
+    setMsg("🎉 發現隱藏寶箱！獲得額外驚喜！");
+  }
+
+  async function handleSaveName() {
+    if (!naming) return;
+    const targetName = naming.name.trim();
+    setLocalNames((prev) => ({ ...prev, [naming.id]: targetName }));
+    if (onRenamePet) {
+      await onRenamePet(naming.id, targetName);
+    } else {
+      try {
+        await fetch("/api/student/pet-info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ petId: naming.id, name: targetName }),
+        });
+      } catch (e) {}
+    }
+    setNaming(null);
+    setMsg("✨ 命名成功！");
+  }
 
   async function act(fn?: () => Promise<{ ok: boolean; error?: string }>, okMsg = "") {
     if (!fn) return;
@@ -134,90 +191,13 @@ export default function Zoo({
     drag.current = null;
     onSave?.(pos);
   }
-  
-      const [naming, setNaming] = useState<{ id: string; name: string } | null>(null);
-  const [localNames, setLocalNames] = useState<Record<string, string>>({});
 
-  async function handleSaveName() {
-    if (!naming) return;
-    setLocalNames((prev) => ({ ...prev, [naming.id]: naming.name.trim() }));
-    try {
-      await fetch("/api/student/pet-info", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ petId: naming.id, name: naming.name.trim() }),
-      });
-      setMsg("✨ 命名成功！");
-    } catch (e) {
-      setMsg("命名儲存失敗，請稍後再試");
-    }
-    setNaming(null);
-  }
-
-  const [speech, setSpeech] = useState<{id: string, text: string} | null>(null);
-  const [treasure, setTreasure] = useState<{x: number, y: number, found: boolean} | null>(null);
-
-  // 初始化隨機寶箱位置
-  useEffect(() => {
-    if (!readOnly && collection.length > 0 && Math.random() > 0.3) {
-      setTreasure({ x: 50 + Math.random() * 400, y: 100 + Math.random() * 200, found: false });
-    }
-  }, [collection.length, readOnly]);
-
-  function handleAnimalClick(id: string, c: Creature) {
-    if (readOnly) return;
-    const greetings = ["Hello!", "Good job!", "Keep going!", "I love you!", "Awesome!", c.name + "!"];
-    const text = greetings[Math.floor(Math.random() * greetings.length)];
-    setSpeech({ id, text });
-    setTimeout(() => setSpeech(null), 3000);
-  }
-
-  function handleFindTreasure() {
-    setTreasure(prev => prev ? { ...prev, found: true } : null);
-    setMsg("🎉 發現隱藏寶箱！獲得額外驚喜！");
-    // 這裡未來可以串接 API 給予實質獎勵
-  }
-
-  const placedDecos = Object.keys(pos).filter(k => k.startsWith("deco_"));
+  const placedDecos = Object.keys(pos).filter((k) => k.startsWith("deco_"));
 
   return (
     <div className="space-y-2 relative">
-      {!readOnly && (
-        <div className="flex justify-between items-center bg-white rounded-2xl p-3 card-shadow">
-          <p className="text-sm text-slate-500 font-bold">拖曳動物或裝飾品佈置動物園吧！🐾</p>
-          <div className="flex gap-2">
-            <div className="bg-sky-100 text-brand px-3 py-1.5 rounded-full font-bold text-sm flex items-center gap-1">💎 {currentDiamonds}</div>
-            <button onClick={() => setShopOpen(!shopOpen)} className="bg-brand text-white px-4 py-1.5 rounded-full font-bold text-sm hover:scale-105 transition-transform">🛒 商店</button>
-          </div>
-        </div>
-      )}
-
-      {shopOpen && !readOnly && (
-        <div className="bg-white rounded-2xl p-4 card-shadow border-2 border-brand/20">
-          <h3 className="font-bold text-brand mb-3">裝飾品商店</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {DECORATIONS.map(d => {
-              const owned = inventory[d.id] || 0;
-              const affordable = currentDiamonds >= d.price;
-              return (
-                <div key={d.id} className="flex flex-col items-center p-2 rounded-xl bg-violet-50 border border-violet-100">
-                  <span className="text-4xl">{d.emoji}</span>
-                  <span className="font-bold text-sm mt-1">{d.name}</span>
-                  <span className="text-xs text-slate-500 mb-2">已擁有: {owned}</span>
-                  <button 
-                    onClick={() => handleBuy(d.id)} disabled={!affordable || buying}
-                    className={`px-3 py-1 rounded-full text-xs font-bold w-full flex justify-center gap-1 ${affordable ? "bg-brand text-white" : "bg-slate-200 text-slate-400"}`}
-                  >
-                    <span>💎</span> {d.price}
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-            {naming && !readOnly && (
+      {/* 專屬命名卡片 Modal */}
+      {naming && !readOnly && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 rounded-2xl">
           <div className="bg-white p-5 rounded-2xl shadow-2xl space-y-3 flex flex-col items-center max-w-[280px] w-full mx-4 border-2 border-brand/20">
             <span className="text-3xl">🏷️</span>
@@ -251,9 +231,48 @@ export default function Zoo({
         </div>
       )}
 
+      {/* 頂部功能列 */}
+      {!readOnly && (
+        <div className="flex justify-between items-center bg-white rounded-2xl p-3 card-shadow">
+          <p className="text-sm text-slate-500 font-bold">拖曳動物或裝飾品佈置動物園吧！🐾</p>
+          <div className="flex gap-2">
+            <div className="bg-sky-100 text-brand px-3 py-1.5 rounded-full font-bold text-sm flex items-center gap-1">💎 {currentDiamonds}</div>
+            <button onClick={() => setShopOpen(!shopOpen)} className="bg-brand text-white px-4 py-1.5 rounded-full font-bold text-sm hover:scale-105 transition-transform">🛒 商店</button>
+          </div>
+        </div>
+      )}
+
+      {/* 裝飾品商店 */}
+      {shopOpen && !readOnly && (
+        <div className="bg-white rounded-2xl p-4 card-shadow border-2 border-brand/20">
+          <h3 className="font-bold text-brand mb-3">裝飾品商店</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {DECORATIONS.map((d) => {
+              const owned = inventory[d.id] || 0;
+              const affordable = currentDiamonds >= d.price;
+              return (
+                <div key={d.id} className="flex flex-col items-center p-2 rounded-xl bg-violet-50 border border-violet-100">
+                  <span className="text-4xl">{d.emoji}</span>
+                  <span className="font-bold text-sm mt-1">{d.name}</span>
+                  <span className="text-xs text-slate-500 mb-2">已擁有: {owned}</span>
+                  <button
+                    onClick={() => handleBuy(d.id)}
+                    disabled={!affordable || buying}
+                    className={`px-3 py-1 rounded-full text-xs font-bold w-full flex justify-center gap-1 ${affordable ? "bg-brand text-white" : "bg-slate-200 text-slate-400"}`}
+                  >
+                    <span>💎</span> {d.price}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 照顧狀態面板 */}
       {showCare && care && (
         <div className="bg-white rounded-2xl p-3 card-shadow space-y-2">
-                    {away ? (
+          {away ? (
             <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3 text-red-700 text-sm">
               <p className="font-bold mb-1">😭 動物受不了離家出走了！</p>
               <p className="font-bold">救援任務：{care.fedToday ? "✅ 已餵食" : "❌ 尚未餵食"} ｜ {livePoop === 0 ? "✅ 已打掃" : "❌ 尚未打掃"}</p>
@@ -269,11 +288,13 @@ export default function Zoo({
               <span>{care.fedToday ? "✅ 已餵食" : "⬜ 未餵食"} ｜ {livePoop === 0 ? "✅ 已打掃" : "⬜ 未打掃"}</span>
             </div>
           )}
+
           <div className="flex items-center justify-between px-1">
             <span className="font-bold text-slate-700 text-sm">
               {MOOD[worst]} 動物心情：{worst === "ok" ? "很開心" : worst === "warn" ? "需要照顧" : worst === "sick" ? "生病了" : "離家出走"}
             </span>
           </div>
+
           <div className="flex gap-2">
             <button onClick={() => act(onFeed, "餵食成功，動物吃飽飽！🥰")} disabled={care.fedToday || care.feed < 1} className="flex-1 rounded-full bg-amber-100 text-amber-700 px-3 py-2 font-bold disabled:opacity-40">🥕 餵食（{care.feed}）</button>
             <button onClick={() => act(onClean, "打掃完成，動物園好乾淨！✨")} disabled={livePoop < 1 || care.broom < 1} className="flex-1 rounded-full bg-sky-100 text-sky-700 px-3 py-2 font-bold disabled:opacity-40">🧹 打掃（{care.broom}）</button>
@@ -282,8 +303,8 @@ export default function Zoo({
         </div>
       )}
 
+      {/* 動物園畫布 */}
       <div ref={ref} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp} className="relative h-[420px] rounded-2xl overflow-hidden card-shadow select-none touch-none" style={{ background: "linear-gradient(to bottom,#bae6fd 0%,#bae6fd 52%,#86efac 52%,#4ade80 100%)" }}>
-        {/* 預設保留的背景裝飾元素 */}
         <div className="pointer-events-none absolute inset-0 text-3xl">
           <span className="absolute right-4 top-3 text-4xl">☀️</span>
           <span className="absolute left-3 top-24">🌳</span>
@@ -303,6 +324,14 @@ export default function Zoo({
           </div>
         )}
 
+        {/* 尋寶彩蛋 */}
+        {!readOnly && !away && treasure && !treasure.found && (
+          <button onClick={handleFindTreasure} className="absolute text-4xl animate-bounce drop-shadow-md z-10" style={{ left: treasure.x, top: treasure.y }}>
+            🎁
+          </button>
+        )}
+
+        {/* 大便顯示 */}
         {!readOnly && care && !away && livePoop > 0 && collection.length > 0 && (
           <div className="pointer-events-none absolute inset-0 text-2xl">
             {POOP_SPOTS.slice(0, Math.min(livePoop, POOP_SPOTS.length)).map((s, i) => (
@@ -311,6 +340,7 @@ export default function Zoo({
           </div>
         )}
 
+        {/* 離家出走提示 */}
         {away && (
           <div className="absolute inset-0 flex items-center justify-center text-center px-6">
             <p className="bg-white/85 rounded-xl px-4 py-3 text-slate-600 font-bold">
@@ -318,17 +348,19 @@ export default function Zoo({
             </p>
           </div>
         )}
-        
-        {placedDecos.map(key => {
+
+        {/* 裝飾品 */}
+        {placedDecos.map((key) => {
           const baseId = key.split("_")[1];
-          const deco = DECORATIONS.find(d => d.id === baseId);
+          const deco = DECORATIONS.find((d) => d.id === baseId);
           if (!deco) return null;
           const p = pos[key];
           return (
             <button key={key} onPointerDown={(e) => onPointerDown(e, key, p)} title={deco.name} className={`absolute text-4xl touch-none ${readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`} style={{ left: p.x, top: p.y }}>{deco.emoji}</button>
-          )
+          );
         })}
 
+        {/* 動物列表與對話、命名標籤 */}
         {!away && collection.map((c, i) => {
           const dragId = String(i);
           const p = pos[dragId] ?? defaultPos(i);
@@ -369,7 +401,9 @@ export default function Zoo({
                   onPointerDown={(e) => onPointerDown(e, dragId, p)}
                   onClick={() => handleAnimalClick(dragId, c)}
                   title={petName || c.name}
-                  className={	ext-4xl hover:scale-110 transition-transform  }
+                  className={`text-4xl hover:scale-110 transition-transform ${
+                    readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+                  } ${!isSpeaking ? "animate-[pulse_4s_ease-in-out_infinite]" : ""}`}
                 >
                   {c.emoji}
                 </button>
