@@ -135,7 +135,26 @@ export default function Zoo({
     onSave?.(pos);
   }
   
-    const [speech, setSpeech] = useState<{id: string, text: string} | null>(null);
+      const [naming, setNaming] = useState<{ id: string; name: string } | null>(null);
+  const [localNames, setLocalNames] = useState<Record<string, string>>({});
+
+  async function handleSaveName() {
+    if (!naming) return;
+    setLocalNames((prev) => ({ ...prev, [naming.id]: naming.name.trim() }));
+    try {
+      await fetch("/api/student/pet-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ petId: naming.id, name: naming.name.trim() }),
+      });
+      setMsg("✨ 命名成功！");
+    } catch (e) {
+      setMsg("命名儲存失敗，請稍後再試");
+    }
+    setNaming(null);
+  }
+
+  const [speech, setSpeech] = useState<{id: string, text: string} | null>(null);
   const [treasure, setTreasure] = useState<{x: number, y: number, found: boolean} | null>(null);
 
   // 初始化隨機寶箱位置
@@ -194,6 +213,40 @@ export default function Zoo({
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+            {naming && !readOnly && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 rounded-2xl">
+          <div className="bg-white p-5 rounded-2xl shadow-2xl space-y-3 flex flex-col items-center max-w-[280px] w-full mx-4 border-2 border-brand/20">
+            <span className="text-3xl">🏷️</span>
+            <h3 className="font-bold text-brand text-base">幫動物取個專屬名字吧！</h3>
+            <input
+              autoFocus
+              className="w-full border-2 border-violet-200 rounded-xl px-4 py-2 text-center font-bold text-slate-700 outline-none focus:border-brand bg-violet-50/50"
+              value={naming.name}
+              onChange={(e) => setNaming({ ...naming, name: e.target.value })}
+              maxLength={10}
+              placeholder="輸入 1~10 個字"
+            />
+            <div className="flex gap-2 w-full pt-1">
+              <button
+                type="button"
+                onClick={() => setNaming(null)}
+                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600 text-sm"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveName}
+                disabled={!naming.name.trim()}
+                className="flex-1 py-2 bg-brand hover:opacity-90 disabled:opacity-40 text-white rounded-xl font-bold text-sm"
+              >
+                確定
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -279,8 +332,49 @@ export default function Zoo({
         {!away && collection.map((c, i) => {
           const dragId = String(i);
           const p = pos[dragId] ?? defaultPos(i);
+          const isSpeaking = speech?.id === dragId;
+          const petName = localNames[dragId] || (care as any)?.petsInfo?.[dragId]?.name || "";
+          const intimacy = (care as any)?.petsInfo?.[dragId]?.intimacy || 0;
+
           return (
-            <button key={dragId} onPointerDown={(e) => onPointerDown(e, dragId, p)} title={c.name} className={`absolute text-4xl touch-none ${readOnly ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`} style={{ left: p.x, top: p.y }}>{c.emoji}</button>
+            <div key={dragId} className="absolute touch-none flex flex-col items-center z-20" style={{ left: p.x, top: p.y }}>
+              {isSpeaking && (
+                <div className="bg-white/95 border-2 border-brand text-brand font-bold text-xs px-3 py-1.5 rounded-xl mb-1 whitespace-nowrap animate-bounce shadow-md flex items-center gap-2">
+                  <span>{speech.text}</span>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setNaming({ id: dragId, name: petName || c.name });
+                        setSpeech(null);
+                      }}
+                      className="bg-violet-100 hover:bg-violet-200 p-1 rounded-full text-[10px]"
+                      title="取名字"
+                    >
+                      ✏️
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="relative flex flex-col items-center">
+                {petName && (
+                  <div className="absolute -top-4 bg-white/95 px-2 py-0.5 rounded-full text-[10px] font-extrabold text-slate-700 whitespace-nowrap pointer-events-none flex items-center gap-1 shadow-sm border border-violet-100">
+                    <span>{petName}</span>
+                    {intimacy > 0 && <span className="text-pink-500 font-bold">💖{intimacy}</span>}
+                  </div>
+                )}
+                <button
+                  onPointerDown={(e) => onPointerDown(e, dragId, p)}
+                  onClick={() => handleAnimalClick(dragId, c)}
+                  title={petName || c.name}
+                  className={	ext-4xl hover:scale-110 transition-transform  }
+                >
+                  {c.emoji}
+                </button>
+              </div>
+            </div>
           );
         })}
       </div>
