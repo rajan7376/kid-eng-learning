@@ -18,7 +18,7 @@ export interface CareRow {
   broom?: number;
   lastFeedEarned?: string | null;
   lastBroomEarned?: string | null;
-}
+  petsInfo?: Record<string, { name: string; intimacy: number }>;}
 
 export type CareStage = "ok" | "warn" | "sick" | "away";
 
@@ -33,7 +33,7 @@ export interface CareView {
   away: boolean;
   fedToday: boolean;
   cleanedToday: boolean;
-}
+  petsInfo: Record<string, { name: string; intimacy: number }>;}
 
 // 確保 care 有合理初始值；首次擁有動物時給起始道具並把餵/掃時間設為現在
 export function normalizeCare(
@@ -89,7 +89,7 @@ export function computeCareView(care: CareRow, today: string): CareView {
     : 0;
   const hungerStage = feedStage(dsf);
   const messStage = poopStage(poopCount);
-  return {
+    return {
     feed: care.feed ?? 0,
     broom: care.broom ?? 0,
     daysSinceFed: dsf,
@@ -100,6 +100,7 @@ export function computeCareView(care: CareRow, today: string): CareView {
     away: hungerStage === "away" || messStage === "away",
     fedToday: dsf === 0 && !!care.last_fed,
     cleanedToday: !!care.last_cleaned && tpeDate(care.last_cleaned) === today,
+    petsInfo: care.petsInfo ?? {},
   };
 }
 
