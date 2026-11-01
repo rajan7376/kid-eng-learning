@@ -52,17 +52,66 @@ function fillMatches(input: string, answer: string): boolean {
   return cleanIn === cleanAns || parts.includes(cleanIn);
 }
 
-  export interface Question {
-  isPhrase: boolean;
-  choiceAnswer: string;
-  fillAnswer: string;
-  [key: string]: any;
+function stripPos(word: string): string {
+  return word
+    .replace(new RegExp(`[\\(（]\\s*(?:${POS})\\.?\\s*[\\)）]`, "gi"), "")
+    .replace(new RegExp(`\\b(?:${POS})\\.`, "gi"), "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-export interface Response {
+interface Question {
+  card: WordCardRow;
+  word: string; // 已剝除詞性的測驗單字
+  isPhrase: boolean; // 片語(含空格)→ 只考選擇題
+  options: string[];
+  choiceAnswer: string;
+  fromSentence: boolean;
+  blanked: string;
+  fillAnswer: string;
+}
+
+interface Response {
   choice: string | null;
   fill: string;
-  [key: string]: any;
+}
+
+function buildQuestions(cards: WordCardRow[]): Question[] {
+  const meanings = Array.from(
+    new Set(cards.map((c) => c.word_meaning_zh).filter(Boolean) as string[]),
+  );
+
+  return shuffle(cards)
+    .map((card) => {
+      const word = stripPos(card.english_word);
+      if (!word) return null; // 剝完詞性後為空 → 排除
+      // 句子挖空用主要形式(去掉括號/斜線替代與省略號)
+      const primary =
+        word
+          .replace(/[(（][^)）]*[)）]/g, " ")
+          .split("/")[0]
+          .replace(/\.{2,}|…/g, " ")
+          .trim() || word;
+      const fromSentence = Boolean(
+        card.sentence && new RegExp(escapeRegExp(primary), "i").test(card.sentence),
+      );
+      const blanked = fromSentence
+        ? card.sentence!.replace(new RegExp(escapeRegExp(primary), "ig"), "＿＿＿＿")
+        : "";
+      const correct = card.word_meaning_zh || word;
+      const distractors = shuffle(meanings.filter((m) => m !== correct)).slice(0, 3);
+      return {
+        card,
+        word,
+        isPhrase: /\s/.test(primary),
+        options: shuffle([correct, ...distractors]),
+        choiceAnswer: correct,
+        fromSentence,
+        blanked,
+        fillAnswer: word,
+      } as Question;
+    })
+    .filter((q): q is Question => q !== null);
 }
 
 function isQuestionCorrect(q: Question, r: Response): boolean {
