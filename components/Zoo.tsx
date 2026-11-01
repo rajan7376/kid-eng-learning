@@ -176,10 +176,25 @@ export default function Zoo({
 
       {showCare && care && (
         <div className="bg-white rounded-2xl p-3 card-shadow space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-slate-700">
-              {MOOD[worst]} 動物心情：
-              {worst === "ok" ? "開心" : worst === "warn" ? "需要照顧" : worst === "sick" ? "生病了" : "離家出走"}
+                    {away ? (
+            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3 text-red-700 text-sm">
+              <p className="font-bold mb-1">😭 動物受不了離家出走了！</p>
+              <p className="font-bold">救援任務：{care.fedToday ? "✅ 已餵食" : "❌ 尚未餵食"} ｜ {livePoop === 0 ? "✅ 已打掃" : "❌ 尚未打掃"}</p>
+            </div>
+          ) : worst === "warn" || worst === "sick" ? (
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-3 text-amber-700 text-sm">
+              <p className="font-bold mb-1">⚠️ 警告：{care.hungerStage === "warn" || care.hungerStage === "sick" ? "肚子咕嚕嚕，快餓扁啦！" : "環境太髒，大便太多囉！"}</p>
+              <p className="font-bold">再不照顧，動物隨時會離家出走！</p>
+            </div>
+          ) : (
+            <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-2 text-emerald-700 text-sm font-bold flex justify-between items-center">
+              <span>🌟 今日照顧進度</span>
+              <span>{care.fedToday ? "✅ 已餵食" : "⬜ 未餵食"} ｜ {livePoop === 0 ? "✅ 已打掃" : "⬜ 未打掃"}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between px-1">
+            <span className="font-bold text-slate-700 text-sm">
+              {MOOD[worst]} 動物心情：{worst === "ok" ? "很開心" : worst === "warn" ? "需要照顧" : worst === "sick" ? "生病了" : "離家出走"}
             </span>
           </div>
           <div className="flex gap-2">
