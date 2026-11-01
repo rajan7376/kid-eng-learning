@@ -52,6 +52,8 @@ function fillMatches(input: string, answer: string): boolean {
   return cleanIn === cleanAns || parts.includes(cleanIn);
 }
 
+const POS = "n|v|vt|vi|adj|adv|prep|pron|conj|interj|art|aux|phr|num";
+// 剝掉單字裡的詞性標記，如「abandon (v.)」「run v.」→「abandon」「run」
 function stripPos(word: string): string {
   return word
     .replace(new RegExp(`[\\(（]\\s*(?:${POS})\\.?\\s*[\\)）]`, "gi"), "")
