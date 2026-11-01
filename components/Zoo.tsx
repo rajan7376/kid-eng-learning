@@ -135,6 +135,30 @@ export default function Zoo({
     onSave?.(pos);
   }
   
+    const [speech, setSpeech] = useState<{id: string, text: string} | null>(null);
+  const [treasure, setTreasure] = useState<{x: number, y: number, found: boolean} | null>(null);
+
+  // 初始化隨機寶箱位置
+  useEffect(() => {
+    if (!readOnly && collection.length > 0 && Math.random() > 0.3) {
+      setTreasure({ x: 50 + Math.random() * 400, y: 100 + Math.random() * 200, found: false });
+    }
+  }, [collection.length, readOnly]);
+
+  function handleAnimalClick(id: string, c: Creature) {
+    if (readOnly) return;
+    const greetings = ["Hello!", "Good job!", "Keep going!", "I love you!", "Awesome!", c.name + "!"];
+    const text = greetings[Math.floor(Math.random() * greetings.length)];
+    setSpeech({ id, text });
+    setTimeout(() => setSpeech(null), 3000);
+  }
+
+  function handleFindTreasure() {
+    setTreasure(prev => prev ? { ...prev, found: true } : null);
+    setMsg("🎉 發現隱藏寶箱！獲得額外驚喜！");
+    // 這裡未來可以串接 API 給予實質獎勵
+  }
+
   const placedDecos = Object.keys(pos).filter(k => k.startsWith("deco_"));
 
   return (
